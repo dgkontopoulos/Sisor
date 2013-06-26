@@ -1,7 +1,7 @@
-(load "~/.sbclrc")
+;(load "~/.sbclrc")
 
-(require 'asdf)
-(asdf:operate 'asdf:load-op :cl-gtk2-gtk)
+;(require 'asdf)
+;(asdf:operate 'asdf:load-op :cl-gtk2-gtk)
 
 (defun run ()
   (gtk:within-main-loop
@@ -35,24 +35,53 @@
 				    :selectable t
 				    :use-markup t))
 	 (space_photo (make-instance 'gtk:image
-				     :file "./images/default_space.png")))
+				     :file "./images/default_space.png"))
+	 (select_hbox (make-instance 'gtk:h-box))
+	 (select_image (make-instance 'gtk:button
+				      :label "Select a photo for this space"))
+	 (delete_image (make-instance 'gtk:button
+				      :label "Remove the photo"
+				      :sensitive nil)))
 
      (gobject:g-signal-connect about_button "clicked"
 			       (lambda (b) (about window)))
      (gtk:container-add hbox1 new_button)
      (gtk:container-add hbox1 open_button)
      (gtk:container-add hbox1 edit_button)
+
+     (gobject:g-signal-connect delete_button "clicked"
+			       (lambda (b) (delete-reask)))
      (gtk:container-add hbox1 delete_button)
+
      (gtk:container-add hbox1 about_button)
 
      (gobject:g-signal-connect exit_button "clicked"
-			       (lambda (b) (gtk:object-destroy window)))
+			       (lambda (b)
+				 (gtk:object-destroy window)
+				 (exit :abort t)))
      (gtk:container-add hbox1 exit_button)
 
      (gtk:container-add vbox hbox1)
      (gtk:container-add vbox space_name)
      (gtk:container-add vbox space_photo)
+
+     (gobject:g-signal-connect select_image "clicked"
+			       (lambda (b)
+				 (setf (gtk:button-label select_image) "Select a different photo")
+				 (setf (gtk:widget-sensitive delete_image) t)))
+     (gtk:container-add select_hbox select_image)
+
+     (gobject:g-signal-connect delete_image "clicked"
+			       (lambda (b)
+				 (setf (gtk:button-label select_image) "Select a photo for this space")
+				 (setf (gtk:widget-sensitive delete_image) nil)
+				 (setf (gtk:image-file space_photo) "./images/default_space.png")))
+     (gtk:container-add select_hbox delete_image)
+
+     (gtk:container-add vbox select_hbox)
      (gtk:container-add window vbox)
+
+     (setf settings-gtk-button-images t)
      (gtk:widget-show window :all :t))))
 
 (defun about (window)
@@ -121,9 +150,11 @@ PARTICULAR PURPOSE.</i></span>
 ")
 					    (gtk:widget-show about_window :all :t)
 					    (setf license_counter 0)
-					    (setf thanks_counter 1))
+					    (setf thanks_counter 1)
+					    (setf (gtk:toggle-button-active thanks_button) nil))
 				     (progn (setf (gtk:label-label second_info) default_text)
 					    (setf license_counter 1)
+					    (setf (gtk:toggle-button-active thanks_button) nil)
 					    (setf thanks_counter 1)))))
      (gtk:container-add hbox license_button)
 
@@ -136,9 +167,11 @@ PARTICULAR PURPOSE.</i></span>
 ")
 					    (gtk:widget-show about_window :all :t)
 					    (setf thanks_counter 0)
-					    (setf license_counter 1))
+					    (setf license_counter 1)
+					    (setf (gtk:toggle-button-active license_button) nil))
 				     (progn (setf (gtk:label-label second_info) default_text)
 					    (setf thanks_counter 1)
+					    (setf (gtk:toggle-button-active license_button) nil)
 					    (setf license_counter 1)))))
      (gtk:container-add hbox thanks_button)
 
@@ -149,5 +182,48 @@ PARTICULAR PURPOSE.</i></span>
      (gtk:container-add vbox hbox)
      (gtk:container-add about_window vbox)
      (gtk:widget-show about_window :all :t))))
+
+(defun delete-reask ()
+  (gtk:within-main-loop
+   (let ((window (make-instance  'gtk:gtk-window
+				 :type :popup
+				 :window-position :mouse
+				 :border-width 5))
+	 (vbox (make-instance 'gtk:v-box))
+	 (hbox1 (make-instance 'gtk:h-box))
+	 (warning (make-instance 'gtk:image
+				 :stock "gtk-dialog-warning"))
+	 (label1 (make-instance 'gtk:label
+				:label
+				"This action will <b>delete the current project
+and any data linked to it</b>."
+				:use-markup t))
+	 (label2 (make-instance 'gtk:label
+				:label "Is that OK?"))
+	 (hbox2 (make-instance 'gtk:h-box))
+	 (no_button (make-instance 'gtk:button
+				   :label "gtk-no"
+				   :use-stock t))
+	 (yes_button (make-instance 'gtk:button
+				    :label "gtk-yes"
+				    :use-stock t)))
+
+     (gtk:container-add hbox1 warning)
+     (gtk:container-add hbox1 label1)
+     (gtk:container-add vbox hbox1)
+     (gtk:container-add vbox label2)
+     (gtk:container-add vbox (make-instance 'gtk:h-separator))
+
+     (gobject:g-signal-connect no_button "clicked"
+			       (lambda (b) (gtk:object-destroy window)))
+     (gtk:container-add hbox2 no_button)
+
+     (gobject:g-signal-connect yes_button "clicked"
+			       (lambda (b) (gtk:object-destroy window)))
+     (gtk:container-add hbox2 yes_button)
+
+     (gtk:container-add vbox hbox2)
+     (gtk:container-add window vbox)
+     (gtk:widget-show window :all :t))))
 
 (run)
