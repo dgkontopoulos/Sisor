@@ -10,7 +10,7 @@
 				 :type :toplevel
 				 :window-position :mouse
 				 :resize t))
-	 (vbox (make-instance 'gtk:v-box))
+	 (vbox1 (make-instance 'gtk:v-box))
 	 (hbox1 (make-instance 'gtk:h-box))
 	 (new_button (make-instance 'gtk:button
 				    :label "gtk-new"
@@ -30,6 +30,9 @@
 	 (exit_button (make-instance 'gtk:button
 				     :label "gtk-quit"
 				     :use-stock t))
+	 (hbox2 (make-instance 'gtk:h-box
+			       :spacing 5))
+	 (vbox2 (make-instance 'gtk:v-box))
 	 (space_name (make-instance 'gtk:label
 				    :label "<span size='large'><b>Untitled space</b></span>"
 				    :selectable t
@@ -41,7 +44,50 @@
 				      :label "Select a photo for this space"))
 	 (delete_image (make-instance 'gtk:button
 				      :label "Remove the photo"
-				      :sensitive nil)))
+				      :sensitive nil))
+	 (managing_hbox (make-instance 'gtk:h-box
+				       :spacing 20))
+	 (inventory_vbox (make-instance 'gtk:v-box))
+	 (inventory (make-instance 'gtk:label
+				   :label "<u><b>Inventory</b></u>"
+				   :use-markup t))
+	 (inventory_list (make-instance 'gtk:combo-box))
+	 (item_hbox (make-instance 'gtk:h-box))
+	 (item_label (make-instance 'gtk:label
+				    :label "<i>Item name</i>"
+				    :use-markup t))
+	 (item_image (make-instance 'gtk:image
+				    :file "./images/default_item.png"))
+	 (item_actions_hbox (make-instance 'gtk:h-box))
+	 (remove_item (make-instance 'gtk:button
+				     :label "Remove this item"
+				     :sensitive nil))
+	 (move_item (make-instance 'gtk:button
+				   :label "Move to another space"
+				   :sensitive nil))
+	 (add_item_vbox (make-instance 'gtk:v-box
+				       :spacing 23))
+	 (add_item (make-instance 'gtk:label
+				  :label "<u><b>Add new item</b></u>"
+				  :use-markup t))
+	 (new_item_hbox (make-instance 'gtk:h-box
+				       :spacing 10))
+	 (image_file_label (make-instance 'gtk:label
+					  :label "Image file:"))
+	 (image_select_button (make-instance 'gtk:file-chooser-button
+					     :width-request 150))
+	 (naming_hbox (make-instance 'gtk:h-box
+				     :spacing 10))
+	 (new_item_name (make-instance 'gtk:label
+				       :label "Item name:"))
+	 (item_entry (make-instance 'gtk:entry))
+	 (add_button (make-instance 'gtk:button
+				    :label "Add to inventory"))
+	 (side_vbox (make-instance 'gtk:v-box))
+	 (other_spaces (make-instance 'gtk:label
+				      :label "<b>Other spaces in this project</b>"
+				      :use-markup t))
+	 (spaces_list (make-instance 'gtk:tree-view)))
 
      (gobject:g-signal-connect about_button "clicked"
 			       (lambda (b) (about window)))
@@ -61,9 +107,9 @@
 				 (exit :abort t)))
      (gtk:container-add hbox1 exit_button)
 
-     (gtk:container-add vbox hbox1)
-     (gtk:container-add vbox space_name)
-     (gtk:container-add vbox space_photo)
+     (gtk:container-add vbox1 hbox1)
+     (gtk:container-add vbox2 space_name)
+     (gtk:container-add vbox2 space_photo)
 
      (gobject:g-signal-connect select_image "clicked"
 			       (lambda (b)
@@ -77,11 +123,54 @@
 				 (setf (gtk:widget-sensitive delete_image) nil)
 				 (setf (gtk:image-file space_photo) "./images/default_space.png")))
      (gtk:container-add select_hbox delete_image)
+     (gtk:container-add vbox2 select_hbox)
 
-     (gtk:container-add vbox select_hbox)
-     (gtk:container-add window vbox)
+     (gtk:container-add vbox2 (make-instance 'gtk:h-separator))
 
-     (setf settings-gtk-button-images t)
+     (gtk:container-add inventory_vbox inventory)
+     (gtk:container-add inventory_vbox inventory_list)
+
+     (gtk:container-add item_hbox item_label)
+     (gtk:container-add item_hbox item_image)
+     (gtk:container-add inventory_vbox item_hbox)
+
+     (gtk:container-add item_actions_hbox remove_item)
+     (gtk:container-add item_actions_hbox move_item)
+     (gtk:container-add inventory_vbox item_actions_hbox)
+
+     (gtk:container-add managing_hbox inventory_vbox)
+     (gtk:container-add managing_hbox (make-instance 'gtk:v-separator))
+
+     (gtk:container-add add_item_vbox add_item)
+
+     (gtk:container-add new_item_hbox image_file_label)
+     (gtk:container-add new_item_hbox image_select_button)
+     (gtk:container-add add_item_vbox new_item_hbox)
+
+     (gtk:container-add naming_hbox new_item_name)
+     (gtk:container-add naming_hbox item_entry)
+     (gtk:container-add add_item_vbox naming_hbox)
+
+     (gtk:container-add add_item_vbox add_button)
+
+     (gtk:container-add managing_hbox add_item_vbox)
+
+     (gtk:container-add vbox2 managing_hbox)
+
+     (gtk:container-add hbox2 vbox2)
+     (gtk:container-add hbox2 (make-instance 'gtk:v-separator))
+
+     (gtk:box-pack-start side_vbox other_spaces :expand nil)
+     (gtk:container-add side_vbox spaces_list)
+     (gtk:container-add hbox2 side_vbox)
+
+     (gtk:container-add vbox1 hbox2)
+
+     (gtk:container-add window vbox1)
+
+     (gobject:g-signal-connect window "destroy"
+			       (lambda (b)
+				 (exit :abort t)))
      (gtk:widget-show window :all :t))))
 
 (defun about (window)
@@ -200,7 +289,7 @@ and any data linked to it</b>."
 				:use-markup t))
 	 (label2 (make-instance 'gtk:label
 				:label "Is that OK?"))
-	 (hbox2 (make-instance 'gtk:h-box))
+	 (hbox3 (make-instance 'gtk:h-box))
 	 (no_button (make-instance 'gtk:button
 				   :label "gtk-no"
 				   :use-stock t))
