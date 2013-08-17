@@ -2,6 +2,7 @@
 
 ;(require 'asdf)
 ;(asdf:operate 'asdf:load-op :cl-gtk2-gtk)
+;(asdf:operate 'asdf:load-op :cl-ppcre)
 
 (defun run ()
   (gtk:within-main-loop
@@ -150,6 +151,11 @@
      (gtk:container-add naming_hbox new_item_name)
      (gtk:container-add naming_hbox item_entry)
      (gtk:container-add add_item_vbox naming_hbox)
+
+     (gobject:g-signal-connect add_button "clicked"
+			       (lambda (b)
+				 (if (not (eq (cl-ppcre:scan "^\\s*$" (gtk:entry-text item_entry)) nil))
+				     (empty-item-name))))
 
      (gtk:container-add add_item_vbox add_button)
 
@@ -312,6 +318,36 @@ and any data linked to it</b>."
      (gtk:container-add hbox2 yes_button)
 
      (gtk:container-add vbox hbox2)
+     (gtk:container-add window vbox)
+     (gtk:widget-show window :all :t))))
+
+(defun empty-item-name ()
+  (gtk:within-main-loop
+   (let ((window (make-instance  'gtk:gtk-window
+				 :type :popup
+				 :window-position :mouse
+				 :border-width 5))
+	 (vbox (make-instance 'gtk:v-box))
+	 (hbox1 (make-instance 'gtk:h-box))
+	 (error_pic (make-instance 'gtk:image
+				   :stock "gtk-dialog-error"))
+	 (error_message (make-instance 'gtk:label
+				       :label
+				       "<b>ERROR!</b>
+
+An item name was not provided!
+"
+				       :use-markup t))
+	 (close_button (make-instance 'gtk:button
+				      :label "gtk-close"
+				      :use-stock t)))
+     (gtk:container-add hbox1 error_pic)
+     (gtk:container-add hbox1 error_message)
+     (gtk:container-add vbox hbox1)
+
+     (gobject:g-signal-connect close_button "clicked"
+			       (lambda (b) (gtk:object-destroy window)))
+     (gtk:container-add vbox close_button)
      (gtk:container-add window vbox)
      (gtk:widget-show window :all :t))))
 
