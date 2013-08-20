@@ -34,10 +34,10 @@
 	 (hbox2 (make-instance 'gtk:h-box
 			       :spacing 5))
 	 (vbox2 (make-instance 'gtk:v-box))
-	 (space_name (make-instance 'gtk:label
-				    :label "<span size='large'><b>Untitled space</b></span>"
-				    :selectable t
-				    :use-markup t))
+	 (space_name (make-instance 'gtk:entry
+				    :text "Untitled space"
+				    :has-frame nil
+				    :xalign 0.5))
 	 (space_photo (make-instance 'gtk:image
 				     :file "./images/default_space.png"))
 	 (select_hbox (make-instance 'gtk:h-box))
@@ -154,7 +154,8 @@
 
      (gobject:g-signal-connect add_button "clicked"
 			       (lambda (b)
-				 (if (not (eq (cl-ppcre:scan "^\\s*$" (gtk:entry-text item_entry)) nil))
+				 (if (or (not (eq (cl-ppcre:scan "^\\s*$" (gtk:entry-text item_entry)) nil))
+					 (eq (cl-ppcre:scan "png|jpg|jpeg|gif$" (gtk:file-chooser-filename image_select_button)) nil))
 				     (empty-item-name))))
 
      (gtk:container-add add_item_vbox add_button)
@@ -295,7 +296,7 @@ and any data linked to it</b>."
 				:use-markup t))
 	 (label2 (make-instance 'gtk:label
 				:label "Is that OK?"))
-	 (hbox3 (make-instance 'gtk:h-box))
+	 (hbox2 (make-instance 'gtk:h-box))
 	 (no_button (make-instance 'gtk:button
 				   :label "gtk-no"
 				   :use-stock t))
@@ -334,8 +335,8 @@ and any data linked to it</b>."
 	 (error_message (make-instance 'gtk:label
 				       :label
 				       "<b>ERROR!</b>
-
-An item name was not provided!
+Either a valid image file (png, jpg, jpeg or gif) or
+an item name was not provided!
 "
 				       :use-markup t))
 	 (close_button (make-instance 'gtk:button
