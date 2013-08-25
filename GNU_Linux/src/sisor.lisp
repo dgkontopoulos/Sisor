@@ -41,8 +41,14 @@
 	 (space_photo (make-instance 'gtk:image
 				     :file "./images/default_space.png"))
 	 (select_hbox (make-instance 'gtk:h-box))
-	 (select_image (make-instance 'gtk:button
-				      :label "Select a photo for this space"))
+	 (select_label (make-instance 'gtk:label
+				      :label "Select a photo for this space:"))
+	 (image_filter (make-instance 'gtk:file-filter
+				      :name "Image files (*.png, *.jpg, *.jpeg, *.tif, *.tiff, *.bmp)"))
+	 (select_button (make-instance 'gtk:file-chooser-button
+				       :select-multiple nil
+				       :width-chars 20
+				       :title "Select a photo for this space"))
 	 (delete_image (make-instance 'gtk:button
 				      :label "Remove the photo"
 				      :sensitive nil))
@@ -75,8 +81,8 @@
 				       :spacing 10))
 	 (image_file_label (make-instance 'gtk:label
 					  :label "Image file:"))
-	 (image_select_button (make-instance 'gtk:file-chooser-button
-					     :width-request 150))
+	 (item_select_button (make-instance 'gtk:file-chooser-button
+					    :width-request 150))
 	 (naming_hbox (make-instance 'gtk:h-box
 				     :spacing 10))
 	 (new_item_name (make-instance 'gtk:label
@@ -112,11 +118,21 @@
      (gtk:container-add vbox2 space_name)
      (gtk:container-add vbox2 space_photo)
 
-     (gobject:g-signal-connect select_image "clicked"
-			       (lambda (b)
-				 (setf (gtk:button-label select_image) "Select a different photo")
-				 (setf (gtk:widget-sensitive delete_image) t)))
-     (gtk:container-add select_hbox select_image)
+					;(gobject:g-signal-connect select_image "clicked"
+					;(lambda (b)
+					;(gobject:g-signal-connect space_select "destroy"
+					;(lambda (widget)
+					;(declare (ignore widget))
+					;(gtk:object-destroy widget)))
+					;(gtk:dialog-run space_select)
+
+					;(setf (gtk:button-label select_image) "Select a different photo")
+					;(setf (gtk:widget-sensitive delete_image) t)))
+     (gtk:container-add select_hbox select_label)
+     (gtk:file-filter-add-pixbuf-formats image_filter)
+
+     (gtk:file-chooser-add-filter select_button image_filter)
+     (gtk:container-add select_hbox select_button)
 
      (gobject:g-signal-connect delete_image "clicked"
 			       (lambda (b)
@@ -145,7 +161,9 @@
      (gtk:container-add add_item_vbox add_item)
 
      (gtk:container-add new_item_hbox image_file_label)
-     (gtk:container-add new_item_hbox image_select_button)
+
+     (gtk:file-chooser-add-filter item_select_button image_filter)
+     (gtk:container-add new_item_hbox item_select_button)
      (gtk:container-add add_item_vbox new_item_hbox)
 
      (gtk:container-add naming_hbox new_item_name)
