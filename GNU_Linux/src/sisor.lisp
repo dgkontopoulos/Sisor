@@ -4,6 +4,136 @@
 ;(asdf:operate 'asdf:load-op :cl-gtk2-gtk)
 ;(asdf:operate 'asdf:load-op :cl-ppcre)
 
+(defun starting-popup ()
+  (gtk:within-main-loop
+   (setf gtk:settings-gtk-button-images nil)
+   (let ((window (make-instance 'gtk:gtk-window
+				:type :toplevel
+				:title "Sisor"
+				:window-position :center
+				:decorated nil
+				:allow-grow nil
+				:allow-shrink nil
+				:border-width 20))
+	 (hbox_main (make-instance 'gtk:h-box :spacing 10))
+
+	 (fish_logo (make-instance 'gtk:image
+				   :file "./images/sisor_fish.png"))
+	 (separator (make-instance 'gtk:h-separator))
+
+	 (vbox_welcome (make-instance 'gtk:v-box :spacing 30))
+	 (name_logo (make-instance 'gtk:image
+				   :file "./images/sisor_name.png"))
+
+	 (buttons_vbox_1 (make-instance 'gtk:v-box :spacing 50))
+
+	 (new_event (make-instance 'gtk:event-box))
+	 (new_hbox (make-instance 'gtk:h-box :spacing 5))
+	 (new_image (make-instance 'gtk:image
+				   :stock "gtk-new"
+				   :icon-size 3))
+	 (new_label (make-instance 'gtk:label
+				   :label "<b>New Project</b>"
+				   :use-markup t))
+
+	 (about_event (make-instance 'gtk:event-box))
+	 (about_hbox (make-instance 'gtk:h-box :spacing 5))
+	 (about_image (make-instance 'gtk:image
+				     :stock "gtk-about"
+				     :icon-size 3))
+	 (about_label (make-instance 'gtk:label
+				     :label "<b>About Sisor</b>"
+				     :use-markup t))
+
+	 (buttons_vbox_2 (make-instance 'gtk:v-box :spacing 50))
+
+	 (open_event (make-instance 'gtk:event-box))
+	 (open_hbox (make-instance 'gtk:h-box :spacing 5))
+	 (open_image (make-instance 'gtk:image
+				    :stock "gtk-open"
+				    :icon-size 3))
+	 (open_label (make-instance 'gtk:label
+				    :label "<b>Open Project</b>"
+				    :use-markup t))
+
+	 (quit_event (make-instance 'gtk:event-box))
+	 (quit_hbox (make-instance 'gtk:h-box :spacing 5))
+	 (quit_image (make-instance 'gtk:image
+				    :stock "gtk-quit"
+				    :icon-size 3))
+	 (quit_label (make-instance 'gtk:label
+				    :label "<b>Quit Sisor</b>"
+				    :use-markup t))
+
+	 (buttons_hbox (make-instance 'gtk:h-box :spacing 20)))
+
+     (gtk:container-add hbox_main fish_logo)
+
+     (gtk:container-add vbox_welcome name_logo)
+
+     (gtk:container-add new_hbox new_image)
+     (gtk:container-add new_hbox new_label)
+     (gtk:container-add new_event new_hbox)
+
+     (gtk:widget-modify-bg new_event 0 (gdk:color-parse "#FFFFFF"))
+     (gtk:container-add buttons_vbox_1 new_event)
+
+     (gtk:container-add about_hbox about_image)
+     (gtk:container-add about_hbox about_label)
+     (gtk:container-add about_event about_hbox)
+
+     (gtk:widget-modify-bg about_event 0 (gdk:color-parse "#FFFFFF"))
+
+     (gobject:g-signal-connect about_event "button_press_event"
+			       (lambda (a b)
+				 (about window)))
+     (gtk:container-add buttons_vbox_1 about_event)
+
+     (gtk:container-add buttons_hbox buttons_vbox_1)
+
+     (gtk:container-add open_hbox open_image)
+     (gtk:container-add open_hbox open_label)
+     (gtk:container-add open_event open_hbox)
+
+     (gtk:widget-modify-bg open_event 0 (gdk:color-parse "#FFFFFF"))
+     (gtk:container-add buttons_vbox_2 open_event)
+
+     (gtk:container-add quit_hbox quit_image)
+     (gtk:container-add quit_hbox quit_label)
+     (gtk:container-add quit_event quit_hbox)
+
+     (gtk:widget-modify-bg quit_event 0 (gdk:color-parse "#FFFFFF"))
+
+     (gobject:g-signal-connect quit_event "button_press_event"
+			       (lambda (a b)
+				 (gtk:object-destroy window)
+				 (exit :abort t)))
+     (gtk:container-add buttons_vbox_2 quit_event)
+
+     (gtk:container-add buttons_hbox buttons_vbox_2)
+
+     (gtk:container-add vbox_welcome buttons_hbox)
+
+     (gtk:container-add hbox_main vbox_welcome)
+
+     (gtk:container-add window hbox_main)
+
+     (gobject:g-signal-connect window "destroy"
+			       (lambda (b)
+				 (exit :abort t)))
+     (gtk:widget-show window :all :t))))
+
+(starting-popup)
+
+
+(defun check-if-defined (item)
+  (cond
+   ((string-equal item "space_name")
+    (if (not (boundp '*space_name*)) "Untitled space"))
+   ((string-equal item "space_photo")
+    (if (not (boundp '*space_photo*)) "./images/default_space.png"))
+   (t "")))
+
 (defun run ()
   (gtk:within-main-loop
    (let ((window (make-instance  'gtk:gtk-window
@@ -35,11 +165,11 @@
 			       :spacing 5))
 	 (vbox2 (make-instance 'gtk:v-box))
 	 (space_name (make-instance 'gtk:entry
-				    :text "Untitled space"
+				    :text (check-if-defined "space_name")
 				    :has-frame nil
 				    :xalign 0.5))
 	 (space_photo (make-instance 'gtk:image
-				     :file "./images/default_space.png"))
+				     :file (check-if-defined "space_photo")))
 	 (select_hbox (make-instance 'gtk:h-box))
 	 (select_label (make-instance 'gtk:label
 				      :label "Select a photo for this space:"))
@@ -132,12 +262,21 @@
      (gtk:file-filter-add-pixbuf-formats image_filter)
 
      (gtk:file-chooser-add-filter select_button image_filter)
+
+     (gobject:g-signal-connect select_button "file-set"
+			       (lambda (b)
+				 (setf (gtk:widget-sensitive delete_image) t)
+				 (setf temp_pixbuf
+				       (gdk:pixbuf-new-from-file (format nil "~{~A~}" 
+									 (gtk:file-chooser-filenames select_button))))
+
+				 (setf (gtk:image-pixbuf space_photo) temp_pixbuf)))
      (gtk:container-add select_hbox select_button)
 
      (gobject:g-signal-connect delete_image "clicked"
 			       (lambda (b)
-				 (setf (gtk:button-label select_image) "Select a photo for this space")
 				 (setf (gtk:widget-sensitive delete_image) nil)
+				 (setf (gtk:file-chooser-current-name select_button) "huh")
 				 (setf (gtk:image-file space_photo) "./images/default_space.png")))
      (gtk:container-add select_hbox delete_image)
      (gtk:container-add vbox2 select_hbox)
@@ -306,7 +445,8 @@ PARTICULAR PURPOSE.</i></span>
 	 (vbox (make-instance 'gtk:v-box))
 	 (hbox1 (make-instance 'gtk:h-box))
 	 (warning (make-instance 'gtk:image
-				 :stock "gtk-dialog-warning"))
+				 :stock "gtk-dialog-warning"
+				 :icon-size 3))
 	 (label1 (make-instance 'gtk:label
 				:label
 				"This action will <b>delete the current project
@@ -349,7 +489,8 @@ and any data linked to it</b>."
 	 (vbox (make-instance 'gtk:v-box))
 	 (hbox1 (make-instance 'gtk:h-box))
 	 (error_pic (make-instance 'gtk:image
-				   :stock "gtk-dialog-error"))
+				   :stock "gtk-dialog-error"
+				   :image-size 3))
 	 (error_message (make-instance 'gtk:label
 				       :label
 				       "<b>ERROR!</b>
@@ -369,5 +510,3 @@ an item name was not provided!
      (gtk:container-add vbox close_button)
      (gtk:container-add window vbox)
      (gtk:widget-show window :all :t))))
-
-(run)
