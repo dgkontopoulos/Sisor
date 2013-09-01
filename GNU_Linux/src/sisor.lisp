@@ -1,8 +1,8 @@
-;(load "~/.sbclrc")
 
-;(require 'asdf)
-;(asdf:operate 'asdf:load-op :cl-gtk2-gtk)
-;(asdf:operate 'asdf:load-op :cl-ppcre)
+; DEPENDENCIES: cl-gtk2-gtk, cl-ppcre, cl-fad
+
+
+(defparameter *entered-main-interface* 0)
 
 (defun about (window)
   (gtk:within-main-loop
@@ -109,6 +109,37 @@ PARTICULAR PURPOSE.</i></span>
        (gtk:container-add about_window vbox)
        (gtk:widget-show about_window :all :t)))))
 
+(defun directory-check (dir)
+  (setf dir (cl-ppcre:regex-replace "/?$" dir "/"))
+  (and
+   (cl-fad:directory-exists-p dir)
+   (eql (list-length (directory (concatenate 'string dir "*"))) 0)))
+
+(defun new-project (window)
+  (let ((dir_dialog
+	 (make-instance 'gtk:file-chooser-dialog
+			:title "Select a directory for the new Project"
+			:action :select-folder
+			:local-only t
+			:do-overwrite-confirmation t)))
+
+    (gtk:dialog-add-button dir_dialog "gtk-cancel" :cancel)
+    (gtk:dialog-add-button dir_dialog "gtk-ok" :ok)
+
+    (gobject:connect-signal dir_dialog "response"
+			    (lambda (dir_dialog response)
+			      (cond ((eq response -6)
+				     (gtk:object-destroy dir_dialog))
+				    ((eq response -5)
+				     (progn
+				       (setf *entered-main-interface* 1)
+				       (main-interface)
+				       (gtk:object-destroy dir_dialog)
+				       (gtk:object-destroy window))))))
+
+    (gtk:widget-show dir_dialog)))
+
+
 (defun starting-popup ()
   (gtk:within-main-loop
    (let ((window (make-instance 'gtk:gtk-window
@@ -182,6 +213,11 @@ PARTICULAR PURPOSE.</i></span>
      (gtk:container-add new_event new_hbox)
 
      (gtk:widget-modify-bg new_event 0 (gdk:color-parse "#FFFFFF"))
+
+     (gobject:g-signal-connect new_event "button_press_event"
+			       #'(lambda (a b)
+				   (declare (ignorable a b))
+				   (new-project window)))
      (gtk:container-add buttons_vbox_1 new_event)
 
      (gtk:container-add about_hbox about_image)
@@ -229,7 +265,8 @@ PARTICULAR PURPOSE.</i></span>
      (gobject:g-signal-connect window "destroy"
 			       #'(lambda (b)
 				   (declare (ignorable b))
-				   (exit :abort t)))
+				   (if (eq *entered-main-interface* 0)
+				       (exit :abort t))))
      (gtk:widget-show window :all :t))))
 
 (starting-popup)
@@ -332,7 +369,7 @@ an item name was not provided!
 					(make-instance 'gtk:image
 						       :file "./images/sisor_fish.png"))
 				 :type :toplevel
-				 :window-position :mouse
+				 :window-position :center
 				 :resize t))
 	 (vbox1 (make-instance 'gtk:v-box))
 	 (hbox1 (make-instance 'gtk:h-box))
