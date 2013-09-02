@@ -1,7 +1,7 @@
 
 ; DEPENDENCIES: cl-gtk2-gtk, cl-ppcre, cl-fad
 
-
+(defparameter *dir* "")
 (defparameter *entered-main-interface* 0)
 
 (defun about (window)
@@ -113,7 +113,31 @@ PARTICULAR PURPOSE.</i></span>
   (setf dir (cl-ppcre:regex-replace "/?$" dir "/"))
   (and
    (cl-fad:directory-exists-p dir)
-   (eql (list-length (directory (concatenate 'string dir "*"))) 0)))
+   (eql (list-length (directory (concatenate 'string dir "*.*"))) 0)
+   (ignore-errors (open
+		   (concatenate 'string dir "foo")
+		   :direction :probe :if-does-not-exist :create))
+   (ignore-errors (delete-file (concatenate 'string dir "foo")))))
+
+(defun directory-failure ()
+  (let ((error_diag
+	 (make-instance 'gtk:message-dialog
+			:message-type :error
+			:buttons :close
+			:text "Inappropriate Directory"
+			:secondary-text "One of the following situations has occurred:
+
+-> The directory is not empty.
+-> The directory does not exist.
+-> Sisor does not have the permissions to create or modify files in that directory.
+
+Please, resolve the problem and try again.")))
+
+    (gobject:connect-signal error_diag "response"
+			    #'(lambda (dir_dialog response)
+				(if (eq response -7)
+				    (gtk:object-destroy error_diag))))
+    (gtk:widget-show error_diag)))
 
 (defun new-project (window)
   (let ((dir_dialog
@@ -127,15 +151,20 @@ PARTICULAR PURPOSE.</i></span>
     (gtk:dialog-add-button dir_dialog "gtk-ok" :ok)
 
     (gobject:connect-signal dir_dialog "response"
-			    (lambda (dir_dialog response)
-			      (cond ((eq response -6)
-				     (gtk:object-destroy dir_dialog))
-				    ((eq response -5)
-				     (progn
-				       (setf *entered-main-interface* 1)
-				       (main-interface)
-				       (gtk:object-destroy dir_dialog)
-				       (gtk:object-destroy window))))))
+			    #'(lambda (dir_dialog response)
+				(cond ((eq response -6)
+				       (gtk:object-destroy dir_dialog))
+				      ((eq response -5)
+				       (if (directory-check
+					    (gtk:file-chooser-filename dir_dialog))
+					   (progn
+					     (setf *entered-main-interface* 1)
+					     (setf *dir*
+						   (gtk:file-chooser-filename dir_dialog))
+					     (main-interface)
+					     (gtk:object-destroy dir_dialog)
+					     (gtk:object-destroy window))
+					 (directory-failure))))))
 
     (gtk:widget-show dir_dialog)))
 
@@ -280,86 +309,49 @@ PARTICULAR PURPOSE.</i></span>
     (if (not (boundp '*space_photo*)) "./images/default_space.png"))
    (t "")))
 
-(defun delete-reask ()
+(defun start-from-scratch ()
+  (cl-fad:delete-directory-and-files *dir*)
+  (setf *dir* "")
+  (setf *entered-main-interface* 0))
+
+
+(defun delete-reask (window)
   (gtk:within-main-loop
-   (let ((window (make-instance  'gtk:gtk-window
-				 :type :popup
-				 :window-position :mouse
-				 :border-width 5))
-	 (vbox (make-instance 'gtk:v-box))
-	 (hbox1 (make-instance 'gtk:h-box))
-	 (warning (make-instance 'gtk:image
-				 :stock "gtk-dialog-warning"
-				 :icon-size 3))
-	 (label1 (make-instance 'gtk:label
-				:label
-				"This action will <b>delete the current project
-and any data linked to it</b>."
-				:use-markup t))
-	 (label2 (make-instance 'gtk:label
-				:label "Is that OK?"))
-	 (hbox2 (make-instance 'gtk:h-box))
-	 (no_button (make-instance 'gtk:button
-				   :label "gtk-no"
-				   :use-stock t))
-	 (yes_button (make-instance 'gtk:button
-				    :label "gtk-yes"
-				    :use-stock t)))
+   (let ((dialog (make-instance  'gtk:message-dialog
+				 :message-type :warning
+				 :buttons :yes-no
+				 :text "This action will delete the current project
+and any data linked to it."
+				 :secondary-text "Is that OK?")))
 
-     (gtk:container-add hbox1 warning)
-     (gtk:container-add hbox1 label1)
-     (gtk:container-add vbox hbox1)
-     (gtk:container-add vbox label2)
-     (gtk:container-add vbox (make-instance 'gtk:h-separator))
+     (gobject:connect-signal dialog "response"
+			     #'(lambda (dialog response)
+				 (cond ((eq response -9)
+					(gtk:object-destroy dialog))
+				       ((eq response -8)
+					(progn
+					  (start-from-scratch)
+					  (starting-popup)
+					  (gtk:object-destroy dialog)
+					  (gtk:object-destroy window))))))
 
-     (gobject:g-signal-connect no_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
-				   (gtk:object-destroy window)))
-     (gtk:container-add hbox2 no_button)
-
-     (gobject:g-signal-connect yes_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
-				   (gtk:object-destroy window)))
-     (gtk:container-add hbox2 yes_button)
-
-     (gtk:container-add vbox hbox2)
-     (gtk:container-add window vbox)
-     (gtk:widget-show window :all :t))))
+     (gtk:widget-show dialog))))
 
 (defun empty-item-name ()
   (gtk:within-main-loop
-   (let ((window (make-instance  'gtk:gtk-window
-				 :type :popup
-				 :window-position :mouse
-				 :border-width 5))
-	 (vbox (make-instance 'gtk:v-box))
-	 (hbox1 (make-instance 'gtk:h-box))
-	 (error_pic (make-instance 'gtk:image
-				   :stock "gtk-dialog-error"
-				   :image-size 3))
-	 (error_message (make-instance 'gtk:label
-				       :label
-				       "<b>ERROR!</b>
-Either a valid image file (png, jpg, jpeg or gif) or
-an item name was not provided!
-"
-				       :use-markup t))
-	 (close_button (make-instance 'gtk:button
-				      :label "gtk-close"
-				      :use-stock t)))
-     (gtk:container-add hbox1 error_pic)
-     (gtk:container-add hbox1 error_message)
-     (gtk:container-add vbox hbox1)
+   (let ((dialog (make-instance  'gtk:message-dialog
+				 :message-type :error
+				 :buttons :close
+				 :text "Inappropriate Item"
+				 :secondary-text
+				 "Either a valid image file (png, jpg, jpeg or gif) or an item name was not provided!")))
 
-     (gobject:g-signal-connect close_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
-				   (gtk:object-destroy window)))
-     (gtk:container-add vbox close_button)
-     (gtk:container-add window vbox)
-     (gtk:widget-show window :all :t))))
+     (gobject:connect-signal dialog "response"
+			     #'(lambda (dialog response)
+				 (if (eq response -7)
+				     (gtk:object-destroy dialog))))
+
+     (gtk:widget-show dialog))))
 
 (defun main-interface ()
   (gtk:within-main-loop
@@ -467,7 +459,7 @@ an item name was not provided!
      (gobject:g-signal-connect delete_button "clicked"
 			       #'(lambda (b)
 				   (declare (ignorable b))
-				   (delete-reask)))
+				   (delete-reask window)))
      (gtk:container-add hbox1 delete_button)
 
      (gtk:container-add hbox1 about_button)
@@ -563,6 +555,7 @@ an item name was not provided!
      (gobject:g-signal-connect window "destroy"
 			       #'(lambda (b)
 				   (declare (ignorable b))
-				   (exit :abort t)))
+				   (if (eq *entered-main-interface* 1)
+				       (exit :abort t))))
      (gtk:widget-show window :all :t))))
 
