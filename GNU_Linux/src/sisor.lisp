@@ -1,5 +1,6 @@
 
-; DEPENDENCIES: cl-gtk2-gtk, cl-ppcre, cl-fad
+;; LISP DEPENDENCIES: cl-gtk2-gtk, cl-ppcre, cl-fad
+;; OTHER DEPENDENCIES: imagemagick
 
 (defparameter *dir* "")
 (defparameter *entered-main-interface* 0)
@@ -119,33 +120,66 @@ PARTICULAR PURPOSE.</i></span>
 		   :direction :probe :if-does-not-exist :create))
    (ignore-errors (delete-file (concatenate 'string dir "foo")))))
 
-(defun directory-failure ()
-  (let ((error_diag
+(defun failure (item)
+  (let ((dialog
 	 (make-instance 'gtk:message-dialog
 			:message-type :error
 			:buttons :close
-			:text "Inappropriate Directory"
-			:secondary-text "One of the following situations has occurred:
+			:secondary-use-markup t)))
 
--> The directory is not empty.
--> The directory does not exist.
--> Sisor does not have the permissions to create or modify files in that directory.
+    (cond
+     ((string-equal item "directory")
+      (progn
+	(setf (gtk:message-dialog-text dialog) "Inappropriate Directory")
+	(setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
+
+<b>=></b> The directory is not empty.
+
+<b>=></b> The directory does not exist.
+
+<b>=></b> Sisor does not have the permissions to create or modify files in that directory.
 
 Please, resolve the problem and try again.")))
+     ((string-equal item "file")
+      (progn
+	(setf (gtk:message-dialog-text dialog) "Inappropriate File")
+	(setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
 
-    (gobject:connect-signal error_diag "response"
-			    #'(lambda (dir_dialog response)
+<b>=></b> The file does not exist.
+
+<b>=></b> Sisor does not have the permissions to read that file.
+
+Please, resolve the problem and try again."))))
+
+    (gobject:connect-signal dialog "response"
+			    #'(lambda (dialog response)
 				(if (eq response -7)
-				    (gtk:object-destroy error_diag))))
-    (gtk:widget-show error_diag)))
+				    (gtk:object-destroy dialog))))
+    (gtk:widget-show dialog)))
+
+(defun prepare-main-interface (window dialog)
+  (if (eq *entered-main-interface* 0)
+      (progn
+	(setf *entered-main-interface* 1)
+	(setf *dir* (gtk:file-chooser-filename dialog))
+	(main-interface)
+	(gtk:object-destroy dialog)
+	(gtk:object-destroy window))
+    (progn
+      (setf *entered-main-interface* 0)
+      (setf *dir* (gtk:file-chooser-filename dialog))
+      (gtk:object-destroy dialog)
+      (gtk:object-destroy window)
+      (setf *entered-main-interface* 1)
+      (main-interface))))
+
 
 (defun new-project (window)
   (let ((dir_dialog
 	 (make-instance 'gtk:file-chooser-dialog
 			:title "Select a directory for the new Project"
 			:action :select-folder
-			:local-only t
-			:do-overwrite-confirmation t)))
+			:local-only t)))
 
     (gtk:dialog-add-button dir_dialog "gtk-cancel" :cancel)
     (gtk:dialog-add-button dir_dialog "gtk-ok" :ok)
@@ -157,14 +191,8 @@ Please, resolve the problem and try again.")))
 				      ((eq response -5)
 				       (if (directory-check
 					    (gtk:file-chooser-filename dir_dialog))
-					   (progn
-					     (setf *entered-main-interface* 1)
-					     (setf *dir*
-						   (gtk:file-chooser-filename dir_dialog))
-					     (main-interface)
-					     (gtk:object-destroy dir_dialog)
-					     (gtk:object-destroy window))
-					 (directory-failure))))))
+					   (prepare-main-interface window dir_dialog)
+					 (failure "directory"))))))
 
     (gtk:widget-show dir_dialog)))
 
@@ -301,7 +329,7 @@ Please, resolve the problem and try again.")))
 (starting-popup)
 
 
-(defun check-if-defined (item)
+(defun defined-p (item)
   (cond
    ((string-equal item "space_name")
     (if (not (boundp '*space_name*)) "Untitled space"))
@@ -353,6 +381,51 @@ and any data linked to it."
 
      (gtk:widget-show dialog))))
 
+(defun readable-p (file)
+  (and
+   (cl-fad:file-exists-p file)
+   (ignore-errors (open file))))
+
+(defun prepare-main-photo (photo_object button1 button2 photo_file)
+  (setf (gtk:button-label button1) "Select another photo")
+  (setf (gtk:widget-sensitive button2) t)
+  (setf *dir* (cl-ppcre:regex-replace "/?$" *dir* "/"))
+  (asdf:run-shell-command (concatenate 'string "convert '"
+				       photo_file "' -resize 501x301! '" *dir* "space_photo'"))
+  (let ((temp_pixbuf
+	 (gdk:pixbuf-new-from-file (concatenate 'string *dir* "space_photo"))))
+    (setf (gtk:image-pixbuf photo_object) temp_pixbuf)))
+
+(defun select-main-photo (photo button1 button2)
+  (let ((photo_dialog
+	 (make-instance 'gtk:file-chooser-dialog
+			:title "Select a photo for this space"
+			:action :open
+			:local-only t))
+	(image_filter (make-instance 'gtk:file-filter
+				     :name "Image files (*.png, *.jpg, *.jpeg, *.tif, *.tiff, *.bmp)")))
+
+    (gtk:file-filter-add-pixbuf-formats image_filter)
+    (gtk:file-chooser-add-filter photo_dialog image_filter)
+
+    (gtk:dialog-add-button photo_dialog "gtk-cancel" :cancel)
+    (gtk:dialog-add-button photo_dialog "gtk-ok" :ok)
+
+    (gobject:connect-signal photo_dialog "response"
+			    #'(lambda (photo_dialog response)
+				(cond ((eq response -6)
+				       (gtk:object-destroy photo_dialog))
+				      ((eq response -5)
+				       (if (readable-p (format nil "~{~A~}"
+							       (gtk:file-chooser-filenames photo_dialog)))
+					   (progn
+					     (prepare-main-photo photo button1 button2 
+								 (format nil "~{~A~}" (gtk:file-chooser-filenames photo_dialog)))
+					     (gtk:object-destroy photo_dialog))
+					 (failure "file"))))))
+
+    (gtk:widget-show photo_dialog)))
+
 (defun main-interface ()
   (gtk:within-main-loop
    (let ((window (make-instance  'gtk:gtk-window
@@ -387,20 +460,14 @@ and any data linked to it."
 			       :spacing 5))
 	 (vbox2 (make-instance 'gtk:v-box))
 	 (space_name (make-instance 'gtk:entry
-				    :text (check-if-defined "space_name")
+				    :text (defined-p "space_name")
 				    :has-frame nil
 				    :xalign 0.5))
 	 (space_photo (make-instance 'gtk:image
-				     :file (check-if-defined "space_photo")))
+				     :file (defined-p "space_photo")))
 	 (select_hbox (make-instance 'gtk:h-box))
-	 (select_label (make-instance 'gtk:label
-				      :label "Select a photo for this space:"))
-	 (image_filter (make-instance 'gtk:file-filter
-				      :name "Image files (*.png, *.jpg, *.jpeg, *.tif, *.tiff, *.bmp)"))
-	 (select_button (make-instance 'gtk:file-chooser-button
-				       :select-multiple nil
-				       :width-chars 20
-				       :title "Select a photo for this space"))
+	 (select_button (make-instance 'gtk:button
+				       :label "Select a photo for this space"))
 	 (delete_image (make-instance 'gtk:button
 				      :label "Remove the photo"
 				      :sensitive nil))
@@ -448,10 +515,10 @@ and any data linked to it."
 				      :use-markup t))
 	 (spaces_list (make-instance 'gtk:tree-view)))
 
-     (gobject:g-signal-connect about_button "clicked"
+     (gobject:g-signal-connect new_button "clicked"
 			       #'(lambda (b)
 				   (declare (ignorable b))
-				   (about window)))
+				   (new-project window)))
      (gtk:container-add hbox1 new_button)
      (gtk:container-add hbox1 open_button)
      (gtk:container-add hbox1 edit_button)
@@ -462,6 +529,10 @@ and any data linked to it."
 				   (delete-reask window)))
      (gtk:container-add hbox1 delete_button)
 
+     (gobject:g-signal-connect about_button "clicked"
+			       #'(lambda (b)
+				   (declare (ignorable b))
+				   (about window)))
      (gtk:container-add hbox1 about_button)
 
      (gobject:g-signal-connect exit_button "clicked"
@@ -475,27 +546,16 @@ and any data linked to it."
      (gtk:container-add vbox2 space_name)
      (gtk:container-add vbox2 space_photo)
 
-     (gtk:container-add select_hbox select_label)
-     (gtk:file-filter-add-pixbuf-formats image_filter)
-
-     (gtk:file-chooser-add-filter select_button image_filter)
-
-     (gobject:g-signal-connect select_button "file-set"
-			       #'(lambda (b)
-				   (declare (ignorable b))
-				   (setf (gtk:widget-sensitive delete_image) t)
-				   (let ((temp_pixbuf
-					  (gdk:pixbuf-new-from-file (format nil "~{~A~}"
-									    (gtk:file-chooser-filenames select_button)))))
-
-				     (setf (gtk:image-pixbuf space_photo) temp_pixbuf))))
+     (gobject:g-signal-connect select_button "clicked"
+			       #'(lambda (button)
+				   (select-main-photo space_photo button delete_image)))
      (gtk:container-add select_hbox select_button)
 
      (gobject:g-signal-connect delete_image "clicked"
 			       #'(lambda (b)
 				   (declare (ignorable b))
 				   (setf (gtk:widget-sensitive delete_image) nil)
-				   (setf (gtk:file-chooser-current-name select_button) "huh")
+				   (setf (gtk:button-label select_button) "Select a photo for this space")
 				   (setf (gtk:image-file space_photo) "./images/default_space.png")))
      (gtk:container-add select_hbox delete_image)
      (gtk:container-add vbox2 select_hbox)
@@ -520,7 +580,6 @@ and any data linked to it."
 
      (gtk:container-add new_item_hbox image_file_label)
 
-     (gtk:file-chooser-add-filter item_select_button image_filter)
      (gtk:container-add new_item_hbox item_select_button)
      (gtk:container-add add_item_vbox new_item_hbox)
 
