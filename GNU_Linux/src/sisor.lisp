@@ -1,8 +1,10 @@
 
-;; LISP DEPENDENCIES: cl-gtk2-gtk, cl-ppcre, cl-fad
-;; OTHER DEPENDENCIES: imagemagick
+;; LISP DEPENDENCIES: cl-gtk2-gtk, cl-ppcre, cl-fad, sqlite
+;; OTHER DEPENDENCIES: imagemagick, sqlite3
 
-(defparameter *dir* "")
+(defparameter *top-dir* "")
+(defparameter *current-dir* "")
+(defparameter *db* "")
 (defparameter *entered-main-interface* 0)
 
 (defun about (window)
@@ -157,20 +159,43 @@ Please, resolve the problem and try again."))))
 				    (gtk:object-destroy dialog))))
     (gtk:widget-show dialog)))
 
+(defun create-space (name)
+  (if (string-equal name "default")
+      (progn
+	(ensure-directories-exist (concatenate 'string *top-dir* "Untitled_space/"))
+	(sqlite:execute-non-query *db* "create table Untitled_space
+(item text, location text, previous_locations text)")
+	(setf *current-dir* (concatenate 'string *top-dir* "Untitled_space/")))
+    (progn
+      (ensure-directories-exist (concatenate 'string *top-dir* name "/"))
+      (sqlite:execute-non-query *db*
+				(concatenate 'string "create table " name
+					     " (item text, location text, previous_locations text)"))
+      (setf *current-dir* (concatenate 'string *top-dir* name "/")))))
+
 (defun prepare-main-interface (window dialog)
   (if (eq *entered-main-interface* 0)
       (progn
 	(setf *entered-main-interface* 1)
-	(setf *dir* (gtk:file-chooser-filename dialog))
+	(setf *top-dir* (cl-ppcre:regex-replace "/?$"
+						(gtk:file-chooser-filename dialog) "/"))
+	(setf *db* (sqlite:connect
+		    (concatenate 'string *top-dir* "sisor.sqlite3")))
+	(create-space "default")
 	(main-interface)
 	(gtk:object-destroy dialog)
 	(gtk:object-destroy window))
     (progn
       (setf *entered-main-interface* 0)
-      (setf *dir* (gtk:file-chooser-filename dialog))
+      (sqlite:disconnect *db*)
+      (setf *top-dir* (cl-ppcre:regex-replace "/?$"
+					      (gtk:file-chooser-filename dialog) "/"))
+      (setf *db* (sqlite:connect
+		  (concatenate 'string *top-dir* "sisor.sqlite3")))
       (gtk:object-destroy dialog)
       (gtk:object-destroy window)
       (setf *entered-main-interface* 1)
+      (create-space "default")
       (main-interface))))
 
 
@@ -338,8 +363,11 @@ Please, resolve the problem and try again."))))
    (t "")))
 
 (defun start-from-scratch ()
-  (cl-fad:delete-directory-and-files *dir*)
-  (setf *dir* "")
+  (cl-fad:delete-directory-and-files *top-dir*)
+  (setf *top-dir* "")
+  (setf *current-dir* "")
+  (sqlite:disconnect *db*)
+  (setf *db* "")
   (setf *entered-main-interface* 0))
 
 
@@ -389,11 +417,10 @@ and any data linked to it."
 (defun prepare-main-photo (photo_object button1 button2 photo_file)
   (setf (gtk:button-label button1) "Select another photo")
   (setf (gtk:widget-sensitive button2) t)
-  (setf *dir* (cl-ppcre:regex-replace "/?$" *dir* "/"))
   (asdf:run-shell-command (concatenate 'string "convert '"
-				       photo_file "' -resize 501x301! '" *dir* "space_photo'"))
+				       photo_file "' -resize 501x301! '" *current-dir* "space_photo'"))
   (let ((temp_pixbuf
-	 (gdk:pixbuf-new-from-file (concatenate 'string *dir* "space_photo"))))
+	 (gdk:pixbuf-new-from-file (concatenate 'string *current-dir* "space_photo"))))
     (setf (gtk:image-pixbuf photo_object) temp_pixbuf)))
 
 (defun select-main-photo (photo button1 button2)
@@ -419,7 +446,7 @@ and any data linked to it."
 				       (if (readable-p (format nil "~{~A~}"
 							       (gtk:file-chooser-filenames photo_dialog)))
 					   (progn
-					     (prepare-main-photo photo button1 button2 
+					     (prepare-main-photo photo button1 button2
 								 (format nil "~{~A~}" (gtk:file-chooser-filenames photo_dialog)))
 					     (gtk:object-destroy photo_dialog))
 					 (failure "file"))))))
@@ -539,6 +566,7 @@ and any data linked to it."
 			       #'(lambda (b)
 				   (declare (ignorable b))
 				   (gtk:object-destroy window)
+				   (sqlite:disconnect *db*)
 				   (exit :abort t)))
      (gtk:container-add hbox1 exit_button)
 
@@ -554,6 +582,8 @@ and any data linked to it."
      (gobject:g-signal-connect delete_image "clicked"
 			       #'(lambda (b)
 				   (declare (ignorable b))
+				   (delete-file
+				    (concatenate 'string *current-dir*  "space_photo"))
 				   (setf (gtk:widget-sensitive delete_image) nil)
 				   (setf (gtk:button-label select_button) "Select a photo for this space")
 				   (setf (gtk:image-file space_photo) "./images/default_space.png")))
@@ -615,6 +645,8 @@ and any data linked to it."
 			       #'(lambda (b)
 				   (declare (ignorable b))
 				   (if (eq *entered-main-interface* 1)
-				       (exit :abort t))))
+				       (progn
+					 (sqlite:disconnect *db*)
+					 (exit :abort t)))))
      (gtk:widget-show window :all :t))))
 
