@@ -112,15 +112,18 @@ PARTICULAR PURPOSE.</i></span>
        (gtk:container-add about_window vbox)
        (gtk:widget-show about_window :all :t)))))
 
-(defun directory-check (dir)
+(defun directory-check (dir status)
   (setf dir (cl-ppcre:regex-replace "/?$" dir "/"))
   (and
    (cl-fad:directory-exists-p dir)
-   (eql (list-length (directory (concatenate 'string dir "*.*"))) 0)
    (ignore-errors (open
-		   (concatenate 'string dir "foo")
+		   (concatenate 'string dir "foo_and_refooo_foo")
 		   :direction :probe :if-does-not-exist :create))
-   (ignore-errors (delete-file (concatenate 'string dir "foo")))))
+   (ignore-errors (delete-file (concatenate 'string dir "foo_and_refooo_foo")))
+   (cond ((string-equal status "new")
+	  (eql (list-length (directory (concatenate 'string dir "*.*"))) 0))
+	 ((string-equal status "open")
+	  (cl-fad:file-exists-p (concatenate 'string dir "sisor.sqlite3"))))))
 
 (defun failure (item)
   (let ((dialog
@@ -130,10 +133,9 @@ PARTICULAR PURPOSE.</i></span>
 			:secondary-use-markup t)))
 
     (cond
-     ((string-equal item "directory")
-      (progn
-	(setf (gtk:message-dialog-text dialog) "Inappropriate Directory")
-	(setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
+     ((string-equal item "new-directory")
+      (setf (gtk:message-dialog-text dialog) "Inappropriate Directory")
+      (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
 
 <b>=></b> The directory is not empty.
 
@@ -141,17 +143,27 @@ PARTICULAR PURPOSE.</i></span>
 
 <b>=></b> Sisor does not have the permissions to create or modify files in that directory.
 
-Please, resolve the problem and try again.")))
+Please, resolve the problem and try again."))
+     ((string-equal item "open-directory")
+      (setf (gtk:message-dialog-text dialog) "Inappropriate Directory")
+      (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
+
+<b>=></b> The directory does not contain a Sisor Project.
+
+<b>=></b> The directory does not exist.
+
+<b>=></b> Sisor does not have the permissions to create, view or modify files in that directory.
+
+Please, resolve the problem and try again."))
      ((string-equal item "file")
-      (progn
-	(setf (gtk:message-dialog-text dialog) "Inappropriate File")
-	(setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
+      (setf (gtk:message-dialog-text dialog) "Inappropriate File")
+      (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
 
 <b>=></b> The file does not exist.
 
 <b>=></b> Sisor does not have the permissions to read that file.
 
-Please, resolve the problem and try again."))))
+Please, resolve the problem and try again.")))
 
     (gobject:connect-signal dialog "response"
 			    #'(lambda (dialog response)
@@ -164,7 +176,7 @@ Please, resolve the problem and try again."))))
       (progn
 	(ensure-directories-exist (concatenate 'string *top-dir* "Untitled_space/"))
 	(sqlite:execute-non-query *db* "create table Untitled_space
-(item text, location text, previous_locations text)")
+	(item text, location text, previous_locations text)")
 	(setf *current-dir* (concatenate 'string *top-dir* "Untitled_space/")))
     (progn
       (ensure-directories-exist (concatenate 'string *top-dir* name "/"))
@@ -173,38 +185,60 @@ Please, resolve the problem and try again."))))
 					     " (item text, location text, previous_locations text)"))
       (setf *current-dir* (concatenate 'string *top-dir* name "/")))))
 
-(defun prepare-main-interface (window dialog)
-  (if (eq *entered-main-interface* 0)
-      (progn
-	(setf *entered-main-interface* 1)
-	(setf *top-dir* (cl-ppcre:regex-replace "/?$"
-						(gtk:file-chooser-filename dialog) "/"))
-	(setf *db* (sqlite:connect
-		    (concatenate 'string *top-dir* "sisor.sqlite3")))
-	(create-space "default")
-	(main-interface)
-	(gtk:object-destroy dialog)
-	(gtk:object-destroy window))
+(defun find-spaces (dirs spaces_list)
+  (if (eql (list-length dirs) 0)
+      spaces_list
     (progn
-      (setf *entered-main-interface* 0)
-      (sqlite:disconnect *db*)
-      (setf *top-dir* (cl-ppcre:regex-replace "/?$"
-					      (gtk:file-chooser-filename dialog) "/"))
-      (setf *db* (sqlite:connect
-		  (concatenate 'string *top-dir* "sisor.sqlite3")))
-      (gtk:object-destroy dialog)
-      (gtk:object-destroy window)
-      (setf *entered-main-interface* 1)
-      (create-space "default")
-      (main-interface))))
+      (setf spaces_list
+	    (append spaces_list (last (pathname-directory (car dirs)))))
+      (find-spaces (cdr dirs) spaces_list))))
+
+(defun open-project ()
+  (let ((available_projects
+	 (find-spaces (directory
+		       (concatenate 'string *top-dir* "*/")) '())))
+
+    (setf *current-dir* (concatenate 'string *top-dir*
+				     (first available_projects) "/"))
+    (format t *current-dir*)
+    (defparameter *space_name* (first available_projects))
+
+    (if (cl-fad:file-exists-p (concatenate 'string *current-dir* "space_photo"))
+	(defparameter *space_photo*
+	  (concatenate 'string *current-dir* "space_photo"))
+      (makunbound '*space_photo*))))
+
+(defun prepare-main-interface (window dialog status)
+  (cond ((eq *entered-main-interface* 0) (setf *entered-main-interface* 1))
+	((eq *entered-main-interface* 1)
+	 (setf *entered-main-interface* 0)
+	 (sqlite:disconnect *db*)))
+
+  (setf *top-dir* (cl-ppcre:regex-replace "/?$"
+					  (gtk:file-chooser-filename dialog) "/"))
+  (setf *db* (sqlite:connect (concatenate 'string *top-dir* "sisor.sqlite3")))
+  (gtk:object-destroy dialog)
+  (gtk:object-destroy window)
+
+  (if (eq *entered-main-interface* 0) (setf *entered-main-interface* 1))
+
+  (cond ((string-equal status "new") (create-space "default"))
+	((string-equal status "open") (open-project)))
+  (main-interface))
 
 
-(defun new-project (window)
+(defun get-project (window status)
   (let ((dir_dialog
 	 (make-instance 'gtk:file-chooser-dialog
-			:title "Select a directory for the new Project"
 			:action :select-folder
 			:local-only t)))
+
+    (cond ((string-equal status "new")
+	   (setf (gtk:gtk-window-title dir_dialog)
+		 "Select a directory for the new Project"))
+	  ((string-equal status "open")
+	   (setf (gtk:gtk-window-title dir_dialog)
+		 "Select a Sisor Project's top directory")))
 
     (gtk:dialog-add-button dir_dialog "gtk-cancel" :cancel)
     (gtk:dialog-add-button dir_dialog "gtk-ok" :ok)
@@ -214,13 +248,18 @@ Please, resolve the problem and try again."))))
 				(cond ((eq response -6)
 				       (gtk:object-destroy dir_dialog))
 				      ((eq response -5)
-				       (if (directory-check
-					    (gtk:file-chooser-filename dir_dialog))
-					   (prepare-main-interface window dir_dialog)
-					 (failure "directory"))))))
+				       (cond ((string-equal status "new")
+					      (if (directory-check
+						   (gtk:file-chooser-filename dir_dialog) "new")
+						  (prepare-main-interface window dir_dialog "new")
+						(failure "new-directory")))
+					     ((string-equal status "open")
+					      (if (directory-check
+						   (gtk:file-chooser-filename dir_dialog) "open")
+						  (prepare-main-interface window dir_dialog "open")
+						(failure "open-directory"))))))))
 
     (gtk:widget-show dir_dialog)))
-
 
 (defun starting-popup ()
   (gtk:within-main-loop
@@ -299,7 +338,7 @@ Please, resolve the problem and try again."))))
      (gobject:g-signal-connect new_event "button_press_event"
 			       #'(lambda (a b)
 				   (declare (ignorable a b))
-				   (new-project window)))
+				   (get-project window "new")))
      (gtk:container-add buttons_vbox_1 new_event)
 
      (gtk:container-add about_hbox about_image)
@@ -321,6 +360,11 @@ Please, resolve the problem and try again."))))
      (gtk:container-add open_event open_hbox)
 
      (gtk:widget-modify-bg open_event 0 (gdk:color-parse "#FFFFFF"))
+
+     (gobject:g-signal-connect open_event "button_press_event"
+			       #'(lambda (a b)
+				   (declare (ignorable a b))
+				   (get-project window "open")))
      (gtk:container-add buttons_vbox_2 open_event)
 
      (gtk:container-add quit_hbox quit_image)
@@ -357,18 +401,23 @@ Please, resolve the problem and try again."))))
 (defun defined-p (item)
   (cond
    ((string-equal item "space_name")
-    (if (not (boundp '*space_name*)) "Untitled space"))
+    (if (not (boundp '*space_name*)) "Untitled space" *space_name*))
    ((string-equal item "space_photo")
-    (if (not (boundp '*space_photo*)) "./images/default_space.png"))
+    (if (not (boundp '*space_photo*)) "./images/default_space.png" *space_photo*))
    (t "")))
 
 (defun start-from-scratch ()
   (cl-fad:delete-directory-and-files *top-dir*)
   (setf *top-dir* "")
   (setf *current-dir* "")
+
   (sqlite:disconnect *db*)
   (setf *db* "")
-  (setf *entered-main-interface* 0))
+
+  (setf *entered-main-interface* 0)
+
+  (makunbound '*space_name*)
+  (makunbound '*space_photo*))
 
 
 (defun delete-reask (window)
@@ -385,11 +434,10 @@ and any data linked to it."
 				 (cond ((eq response -9)
 					(gtk:object-destroy dialog))
 				       ((eq response -8)
-					(progn
-					  (start-from-scratch)
-					  (starting-popup)
-					  (gtk:object-destroy dialog)
-					  (gtk:object-destroy window))))))
+					(start-from-scratch)
+					(starting-popup)
+					(gtk:object-destroy dialog)
+					(gtk:object-destroy window)))))
 
      (gtk:widget-show dialog))))
 
@@ -545,8 +593,13 @@ and any data linked to it."
      (gobject:g-signal-connect new_button "clicked"
 			       #'(lambda (b)
 				   (declare (ignorable b))
-				   (new-project window)))
+				   (get-project window "new")))
      (gtk:container-add hbox1 new_button)
+
+     (gobject:g-signal-connect open_button "clicked"
+			       #'(lambda (b)
+				   (declare (ignorable b))
+				   (get-project window "open")))
      (gtk:container-add hbox1 open_button)
      (gtk:container-add hbox1 edit_button)
 
