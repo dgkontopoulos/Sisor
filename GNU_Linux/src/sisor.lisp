@@ -155,13 +155,28 @@ Please, resolve the problem and try again."))
 <b>=></b> Sisor does not have the permissions to create, view or modify files in that directory.
 
 Please, resolve the problem and try again."))
-     ((string-equal item "file")
+     ((string-equal item "space_photo")
       (setf (gtk:message-dialog-text dialog) "Inappropriate File")
       (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
+
+<b>=></b> A valid image file (png, jpg, jpeg or gif) was not selected.
 
 <b>=></b> The file does not exist.
 
 <b>=></b> Sisor does not have the permissions to read that file.
+
+Please, resolve the problem and try again."))
+     ((string-equal item "space_item")
+      (setf (gtk:message-dialog-text dialog) "Inappropriate Item")
+      (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
+
+<b>=></b> A valid image file (png, jpg, jpeg or gif) was not selected.
+
+<b>=></b> The file does not exist.
+
+<b>=></b> Sisor does not have the permissions to read that file.
+
+<b>=></b> A name for the item was not provided.
 
 Please, resolve the problem and try again.")))
 
@@ -174,7 +189,9 @@ Please, resolve the problem and try again.")))
 (defun create-space (name)
   (if (string-equal name "default")
       (progn
-	(ensure-directories-exist (concatenate 'string *top-dir* "Untitled_space/"))
+	(ensure-directories-exist
+	 (concatenate 'string *top-dir* "Untitled_space/items/"))
+
 	(sqlite:execute-non-query *db* "create table Untitled_space
 	(item text, location text, previous_locations text)")
 	(setf *current-dir* (concatenate 'string *top-dir* "Untitled_space/")))
@@ -398,7 +415,7 @@ Please, resolve the problem and try again.")))
 (starting-popup)
 
 
-(defun defined-p (item)
+(defun check-defined (item)
   (cond
    ((string-equal item "space_name")
     (if (not (boundp '*space_name*)) "Untitled space" *space_name*))
@@ -438,22 +455,6 @@ and any data linked to it."
 					(starting-popup)
 					(gtk:object-destroy dialog)
 					(gtk:object-destroy window)))))
-
-     (gtk:widget-show dialog))))
-
-(defun empty-item-name ()
-  (gtk:within-main-loop
-   (let ((dialog (make-instance  'gtk:message-dialog
-				 :message-type :error
-				 :buttons :close
-				 :text "Inappropriate Item"
-				 :secondary-text
-				 "Either a valid image file (png, jpg, jpeg or gif) or an item name was not provided!")))
-
-     (gobject:connect-signal dialog "response"
-			     #'(lambda (dialog response)
-				 (if (eq response -7)
-				     (gtk:object-destroy dialog))))
 
      (gtk:widget-show dialog))))
 
@@ -497,9 +498,22 @@ and any data linked to it."
 					     (prepare-main-photo photo button1 button2
 								 (format nil "~{~A~}" (gtk:file-chooser-filenames photo_dialog)))
 					     (gtk:object-destroy photo_dialog))
-					 (failure "file"))))))
+					 (failure "space_photo"))))))
 
     (gtk:widget-show photo_dialog)))
+
+(defun add-to-inventory (name photo)
+  (sqlite:execute-non-query *db*
+			    (concatenate 'string "insert into " *space_name*
+					 "(item, location) values(?, ?)") name *space_name*)
+
+  (asdf:run-shell-command (concatenate 'string "convert '"
+				       photo "' -resize 202x102! '" *current-dir*
+				       "items/" name "'"))
+
+  (setf *current_inventory* (sqlite:execute-to-list *db*
+						    (concatenate 'string "select item from "
+								 *space_name*))))
 
 (defun main-interface ()
   (gtk:within-main-loop
@@ -535,17 +549,14 @@ and any data linked to it."
 			       :spacing 5))
 	 (vbox2 (make-instance 'gtk:v-box))
 	 (space_name (make-instance 'gtk:entry
-				    :text (defined-p "space_name")
+				    :text (check-defined "space_name")
 				    :has-frame nil
 				    :xalign 0.5))
 	 (space_photo (make-instance 'gtk:image
-				     :file (defined-p "space_photo")))
+				     :file (check-defined "space_photo")))
 	 (select_hbox (make-instance 'gtk:h-box))
-	 (select_button (make-instance 'gtk:button
-				       :label "Select a photo for this space"))
-	 (delete_image (make-instance 'gtk:button
-				      :label "Remove the photo"
-				      :sensitive nil))
+	 (select_button (make-instance 'gtk:button))
+	 (delete_image (make-instance 'gtk:button :label "Remove the photo"))
 	 (managing_hbox (make-instance 'gtk:h-box
 				       :spacing 20))
 	 (inventory_vbox (make-instance 'gtk:v-box))
@@ -627,6 +638,14 @@ and any data linked to it."
      (gtk:container-add vbox2 space_name)
      (gtk:container-add vbox2 space_photo)
 
+     (if (boundp '*space_photo*)
+	 (progn
+	   (setf (gtk:button-label select_button) "Select another photo")
+	   (setf (gtk:widget-sensitive delete_image) t))
+       (progn
+	 (setf (gtk:button-label select_button) "Select a photo for this space")
+	 (setf (gtk:widget-sensitive delete_image) nil)))
+
      (gobject:g-signal-connect select_button "clicked"
 			       #'(lambda (button)
 				   (select-main-photo space_photo button delete_image)))
@@ -637,6 +656,7 @@ and any data linked to it."
 				   (declare (ignorable b))
 				   (delete-file
 				    (concatenate 'string *current-dir*  "space_photo"))
+				   (makunbound '*space_photo*)
 				   (setf (gtk:widget-sensitive delete_image) nil)
 				   (setf (gtk:button-label select_button) "Select a photo for this space")
 				   (setf (gtk:image-file space_photo) "./images/default_space.png")))
@@ -674,8 +694,12 @@ and any data linked to it."
 			       #'(lambda (b)
 				   (declare (ignorable b))
 				   (if (or (not (eq (cl-ppcre:scan "^\\s*$" (gtk:entry-text item_entry)) nil))
-					   (eq (cl-ppcre:scan "png|jpg|jpeg|gif$" (gtk:file-chooser-filename item_select_button)) nil))
-				       (empty-item-name))))
+					   (eq (cl-ppcre:scan "png|jpg|jpeg|gif$" (gtk:file-chooser-filename item_select_button)) nil)
+					   (not (readable-p (gtk:file-chooser-filename item_select_button))))
+				       (failure "space_item")
+				     (add-to-inventory
+				      (gtk:entry-text item_entry)
+				      (gtk:file-chooser-filename item_select_button)))))
 
      (gtk:container-add add_item_vbox add_button)
 
