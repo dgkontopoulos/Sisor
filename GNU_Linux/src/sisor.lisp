@@ -17,16 +17,16 @@ Projects programming contest</a>. The code is written in
 The application's <a href='http://en.wikipedia.org/wiki/Recursive_acronym#Computer-related_examples'>recursive acronym</a> and logo have been
 inspired from <b><i><a href='http://en.wikipedia.org/wiki/Sisor'>Sisor rabdophorus</a></i></b>.</span>
 "))
-     (let ((about_window (make-instance  'gtk:gtk-window
-					 :title "About Sisor"
-					 :icon (gtk:image-pixbuf
-						(make-instance 'gtk:image
-							       :file "./images/sisor_fish.png"))
-					 :type :toplevel
-					 :border-width 10
-					 :window-position :mouse
-					 :destroy-with-parent t
-					 :transient-for window))
+     (let ((about_window (make-instance 'gtk:gtk-window
+					:title "About Sisor"
+					:icon (gtk:image-pixbuf
+					       (make-instance 'gtk:image
+							      :file "./images/sisor_fish.png"))
+					:type :toplevel
+					:border-width 10
+					:window-position :mouse
+					:destroy-with-parent t
+					:transient-for window))
 	   (vbox (make-instance 'gtk:v-box))
 	   (logo (make-instance 'gtk:image
 				:file "./images/sisor_card.png"))
@@ -155,6 +155,17 @@ Please, resolve the problem and try again."))
 <b>=></b> Sisor does not have the permissions to create, view or modify files in that directory.
 
 Please, resolve the problem and try again."))
+     ((string-equal item "modify-name")
+      (setf (gtk:message-dialog-text dialog) "Error when modifying the space's name")
+      (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
+
+<b>=></b> The name only contains whitespace characters.
+
+<b>=></b> The name contains illegal characters. Names can contain alphanumeric characters, spaces, '_', '-' and '.'.
+
+<b>=></b> The name was not changed.
+
+Please, resolve the problem and try again."))
      ((string-equal item "space_photo")
       (setf (gtk:message-dialog-text dialog) "Inappropriate File")
       (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
@@ -198,8 +209,8 @@ Please, resolve the problem and try again.")))
     (progn
       (ensure-directories-exist (concatenate 'string *top-dir* name "/"))
       (sqlite:execute-non-query *db*
-				(concatenate 'string "create table " name
-					     " (item text, location text, previous_locations text)"))
+				(concatenate 'string "create table '" name
+					     "' (item text, location text, previous_locations text)"))
       (setf *current-dir* (concatenate 'string *top-dir* name "/")))))
 
 (defun find-spaces (dirs spaces_list)
@@ -217,7 +228,6 @@ Please, resolve the problem and try again.")))
 
     (setf *current-dir* (concatenate 'string *top-dir*
 				     (first available_projects) "/"))
-    (format t *current-dir*)
     (defparameter *space_name* (first available_projects))
 
     (if (cl-fad:file-exists-p (concatenate 'string *current-dir* "space_photo"))
@@ -233,6 +243,7 @@ Please, resolve the problem and try again.")))
 
   (setf *top-dir* (cl-ppcre:regex-replace "/?$"
 					  (gtk:file-chooser-filename dialog) "/"))
+  (setf *space_name* "Untitled_space")
   (setf *db* (sqlite:connect (concatenate 'string *top-dir* "sisor.sqlite3")))
   (gtk:object-destroy dialog)
   (gtk:object-destroy window)
@@ -436,15 +447,14 @@ Please, resolve the problem and try again.")))
   (makunbound '*space_name*)
   (makunbound '*space_photo*))
 
-
 (defun delete-reask (window)
   (gtk:within-main-loop
-   (let ((dialog (make-instance  'gtk:message-dialog
-				 :message-type :warning
-				 :buttons :yes-no
-				 :text "This action will delete the current project
+   (let ((dialog (make-instance 'gtk:message-dialog
+				:message-type :warning
+				:buttons :yes-no
+				:text "This action will delete the current project
 and any data linked to it."
-				 :secondary-text "Is that OK?")))
+				:secondary-text "Is that OK?")))
 
      (gobject:connect-signal dialog "response"
 			     #'(lambda (dialog response)
@@ -512,46 +522,99 @@ and any data linked to it."
 				       "items/" name "'"))
 
   (setf *current_inventory* (sqlite:execute-to-list *db*
-						    (concatenate 'string "select item from "
-								 *space_name*))))
+						    (concatenate 'string "select item from '"
+								 *space_name* "'"))))
+
+(defun modify-space-name (button)
+  (let ((dialog (make-instance 'gtk:message-dialog
+			       :message-type :other
+			       :buttons :ok-cancel
+			       :text "Enter a new name for this space:"))
+	(entry (make-instance 'gtk:entry
+			      :text (gtk:button-label button)
+			      :max-length 100)))
+
+    (gtk:container-add (gtk:dialog-content-area dialog) entry)
+
+    (gobject:connect-signal dialog "response"
+			    #'(lambda (dialog response)
+				(cond ((eq response -6)
+				       (gtk:object-destroy dialog))
+				      ((eq response -5)
+				       (if (or
+					    (not (eq
+						  (cl-ppcre:scan "^\\s*$" (gtk:entry-text entry)) nil))
+
+					    (eq (cl-ppcre:scan
+						 "^(\\w|\\s|-|\\.)+$" (gtk:entry-text entry)) nil)
+
+					    (string-equal (gtk:entry-text entry) *space_name*)
+
+					    (string-equal (gtk:entry-text entry)
+							  (concatenate 'string *space_name* "/")))
+					   (failure "modify-name")
+					 (progn
+					   (rename-file *current-dir*
+							(concatenate 'string *top-dir*
+								     (gtk:entry-text entry) "/"))
+
+					   (sqlite:execute-non-query *db*
+								     (concatenate 'string "alter table '"
+										  *space_name* "' rename to '"
+										  (gtk:entry-text entry) "'"))
+
+					   (setf *current-dir* (concatenate 'string *top-dir*
+									    (gtk:entry-text entry) "/"))
+
+					   (setf *space_name* (gtk:entry-text entry))
+					   (setf (gtk:button-label button) (gtk:entry-text entry))
+					   (gtk:object-destroy dialog)))))))
+
+    (gtk:widget-show dialog)))
 
 (defun main-interface ()
   (gtk:within-main-loop
-   (let ((window (make-instance  'gtk:gtk-window
-				 :title "Sisor"
-				 :icon (gtk:image-pixbuf
-					(make-instance 'gtk:image
-						       :file "./images/sisor_fish.png"))
-				 :type :toplevel
-				 :window-position :center
-				 :resize t))
-	 (vbox1 (make-instance 'gtk:v-box))
+   (let ((window (make-instance 'gtk:gtk-window
+				:title "Sisor"
+				:icon (gtk:image-pixbuf
+				       (make-instance 'gtk:image
+						      :file "./images/sisor_fish.png"))
+				:type :toplevel
+				:window-position :center
+				:resize nil))
+	 (vbox1 (make-instance 'gtk:v-box :spacing 5))
 	 (hbox1 (make-instance 'gtk:h-box))
-	 (new_button (make-instance 'gtk:button
-				    :label "gtk-new"
-				    :use-stock t))
-	 (open_button (make-instance 'gtk:button
-				     :label "gtk-open"
-				     :use-stock t))
-	 (edit_button (make-instance 'gtk:button
-				     :label "gtk-edit"
-				     :use-stock t))
-	 (delete_button (make-instance 'gtk:button
-				       :label "gtk-delete"
-				       :use-stock t))
-	 (about_button (make-instance 'gtk:button
-				      :label "gtk-about"
-				      :use-stock t))
-	 (exit_button (make-instance 'gtk:button
-				     :label "gtk-quit"
-				     :use-stock t))
+	 (toolbar (make-instance 'gtk:toolbar))
+	 (event_new (make-instance 'gtk:event-box))
+	 (new_vbox (make-instance 'gtk:v-box))
+	 (new_button (make-instance 'gtk:image
+				    :stock "gtk-new"
+				    :icon-size 3))
+	 (event_open (make-instance 'gtk:event-box))
+	 (open_vbox (make-instance 'gtk:v-box))
+	 (open_button (make-instance 'gtk:image
+				     :stock "gtk-open"
+				     :icon-size 3))
+	 (event_delete (make-instance 'gtk:event-box))
+	 (delete_vbox (make-instance 'gtk:v-box))
+	 (delete_button (make-instance 'gtk:image
+				       :stock "gtk-delete"
+				       :icon-size 3))
+	 (event_about (make-instance 'gtk:event-box))
+	 (about_vbox (make-instance 'gtk:v-box))
+	 (about_button (make-instance 'gtk:image
+				      :stock "gtk-about"
+				      :icon-size 3))
+	 (event_exit (make-instance 'gtk:event-box))
+	 (exit_vbox (make-instance 'gtk:v-box))
+	 (exit_button (make-instance 'gtk:image
+				     :stock "gtk-quit"
+				     :icon-size 3))
 	 (hbox2 (make-instance 'gtk:h-box
 			       :spacing 5))
 	 (vbox2 (make-instance 'gtk:v-box))
-	 (space_name (make-instance 'gtk:entry
-				    :text (check-defined "space_name")
-				    :has-frame nil
-				    :xalign 0.5))
+	 (space_name (make-instance 'gtk:button
+				    :label (check-defined "space_name")))
 	 (space_photo (make-instance 'gtk:image
 				     :file (check-defined "space_photo")))
 	 (select_hbox (make-instance 'gtk:h-box))
@@ -601,40 +664,79 @@ and any data linked to it."
 				      :use-markup t))
 	 (spaces_list (make-instance 'gtk:tree-view)))
 
-     (gobject:g-signal-connect new_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
+     (gtk:container-add vbox1 toolbar)
+     (gtk:container-add toolbar hbox1)
+
+     (gtk:container-add new_vbox new_button)
+     (gtk:container-add new_vbox
+			(make-instance 'gtk:label :label "   New Project   "))
+
+     (gtk:container-add event_new new_vbox)
+     (gobject:g-signal-connect event_new "button_press_event"
+			       #'(lambda (a b)
+				   (declare (ignorable a b))
 				   (get-project window "new")))
-     (gtk:container-add hbox1 new_button)
 
-     (gobject:g-signal-connect open_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
+     (gtk:container-add hbox1 event_new)
+     (gtk:container-add hbox1 (make-instance 'gtk:v-separator))
+
+     (gtk:container-add open_vbox open_button)
+     (gtk:container-add open_vbox
+			(make-instance 'gtk:label :label "   Open Project   "))
+
+     (gtk:container-add event_open open_vbox)
+     (gobject:g-signal-connect event_open "button_press_event"
+			       #'(lambda (a b)
+				   (declare (ignorable a b))
 				   (get-project window "open")))
-     (gtk:container-add hbox1 open_button)
-     (gtk:container-add hbox1 edit_button)
 
-     (gobject:g-signal-connect delete_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
+     (gtk:container-add hbox1 event_open)
+     (gtk:container-add hbox1 (make-instance 'gtk:v-separator))
+
+     (gtk:container-add delete_vbox delete_button)
+     (gtk:container-add delete_vbox
+			(make-instance 'gtk:label :label "   Delete Project   "))
+
+     (gtk:container-add event_delete delete_vbox)
+     (gobject:g-signal-connect event_delete "button_press_event"
+			       #'(lambda (a b)
+				   (declare (ignorable a b))
 				   (delete-reask window)))
-     (gtk:container-add hbox1 delete_button)
+     (gtk:container-add hbox1 event_delete)
+     (gtk:container-add hbox1 (make-instance 'gtk:v-separator))
 
-     (gobject:g-signal-connect about_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
+     (gtk:container-add about_vbox about_button)
+     (gtk:container-add about_vbox
+			(make-instance 'gtk:label :label "   About Sisor   "))
+
+     (gtk:container-add event_about about_vbox)
+     (gobject:g-signal-connect event_about "button_press_event"
+			       #'(lambda (a b)
+				   (declare (ignorable a b))
 				   (about window)))
-     (gtk:container-add hbox1 about_button)
+     (gtk:container-add hbox1 event_about)
+     (gtk:container-add hbox1 (make-instance 'gtk:v-separator))
 
-     (gobject:g-signal-connect exit_button "clicked"
-			       #'(lambda (b)
-				   (declare (ignorable b))
+     (gtk:container-add exit_vbox exit_button)
+     (gtk:container-add exit_vbox
+			(make-instance 'gtk:label :label "   Exit Sisor   "))
+
+     (gtk:container-add event_exit exit_vbox)
+     (gobject:g-signal-connect event_exit "button_press_event"
+			       #'(lambda (a b)
+				   (declare (ignorable a b))
 				   (gtk:object-destroy window)
 				   (sqlite:disconnect *db*)
 				   (exit :abort t)))
-     (gtk:container-add hbox1 exit_button)
+     (gtk:container-add hbox1 event_exit)
+     (gtk:container-add hbox1 (make-instance 'gtk:v-separator))
 
-     (gtk:container-add vbox1 hbox1)
+     (gtk:container-add vbox1 (make-instance 'gtk:h-separator))
+
+     (gobject:g-signal-connect space_name "clicked"
+			       #'(lambda (button)
+				   (modify-space-name button)))
+
      (gtk:container-add vbox2 space_name)
      (gtk:container-add vbox2 space_photo)
 
