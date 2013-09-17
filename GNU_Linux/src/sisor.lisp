@@ -204,7 +204,7 @@ Please, resolve the problem and try again.")))
 	 (concatenate 'string *top-dir* "Untitled_space/items/"))
 
 	(sqlite:execute-non-query *db* "create table Untitled_space
-	(item text, location text, previous_locations text)")
+	(item text, location text, previous_locations text, description text)")
 	(setf *current-dir* (concatenate 'string *top-dir* "Untitled_space/")))
     (progn
       (ensure-directories-exist (concatenate 'string *top-dir* name "/"))
@@ -512,10 +512,11 @@ and any data linked to it."
 
     (gtk:widget-show photo_dialog)))
 
-(defun add-to-inventory (name photo)
+(defun add-to-inventory (name photo description)
   (sqlite:execute-non-query *db*
 			    (concatenate 'string "insert into " *space_name*
-					 "(item, location) values(?, ?)") name *space_name*)
+					 "(item, location, description) values(?, ?, ?)")
+			    name *space_name* description)
 
   (asdf:run-shell-command (concatenate 'string "convert '"
 				       photo "' -resize 202x102! '" *current-dir*
@@ -612,7 +613,7 @@ and any data linked to it."
 				     :icon-size 3))
 	 (hbox2 (make-instance 'gtk:h-box
 			       :spacing 5))
-	 (vbox2 (make-instance 'gtk:v-box))
+	 (vbox2 (make-instance 'gtk:v-box :spacing 5))
 	 (space_name (make-instance 'gtk:button
 				    :label (check-defined "space_name")))
 	 (space_photo (make-instance 'gtk:image
@@ -622,31 +623,39 @@ and any data linked to it."
 	 (delete_image (make-instance 'gtk:button :label "Remove the photo"))
 	 (managing_hbox (make-instance 'gtk:h-box
 				       :spacing 20))
-	 (inventory_vbox (make-instance 'gtk:v-box))
+	 (inventory_vbox (make-instance 'gtk:v-box :sensitive nil))
+	 (inventory_hbox (make-instance 'gtk:h-box))
 	 (inventory (make-instance 'gtk:label
-				   :label "<u><b>Inventory</b></u>"
+				   :label "<b>Inventory:</b>"
 				   :use-markup t))
-	 (inventory_list (make-instance 'gtk:combo-box))
+	 (inventory_list (make-instance 'gtk:scrolled-window
+					:height-request 35
+					:width-request 180))
+	 (inventory_table (make-instance 'gtk:table :n-rows 2 :n-cols 2))
 	 (item_hbox (make-instance 'gtk:h-box))
 	 (item_label (make-instance 'gtk:label
 				    :label "<i>Item name</i>"
 				    :use-markup t))
 	 (item_image (make-instance 'gtk:image
 				    :file "./images/default_item.png"))
+	 (item_description (make-instance 'gtk:text-view
+					  :editable t
+					  :wrap-mode :word-char
+					  :height-request 60
+					  :width-request 170))
 	 (item_actions_hbox (make-instance 'gtk:h-box))
 	 (remove_item (make-instance 'gtk:button
-				     :label "Remove this item"
+				     :label "Remove"
 				     :sensitive nil))
 	 (move_item (make-instance 'gtk:button
 				   :label "Move to another space"
 				   :sensitive nil))
 	 (add_item_vbox (make-instance 'gtk:v-box
-				       :spacing 23))
-	 (add_item (make-instance 'gtk:label
-				  :label "<u><b>Add new item</b></u>"
-				  :use-markup t))
-	 (new_item_hbox (make-instance 'gtk:h-box
 				       :spacing 10))
+	 (add_item (make-instance 'gtk:label
+				  :label "<b>Add new item</b>"
+				  :use-markup t))
+	 (new_item_hbox (make-instance 'gtk:h-box :spacing 10))
 	 (image_file_label (make-instance 'gtk:label
 					  :label "Image file:"))
 	 (item_select_button (make-instance 'gtk:file-chooser-button
@@ -656,6 +665,14 @@ and any data linked to it."
 	 (new_item_name (make-instance 'gtk:label
 				       :label "Item name:"))
 	 (item_entry (make-instance 'gtk:entry))
+	 (description_hbox (make-instance 'gtk:h-box :spacing 10))
+	 (description_label (make-instance 'gtk:label
+					   :label "Description:"))
+	 (description (make-instance 'gtk:text-view
+				     :editable t
+				     :wrap-mode :word-char
+				     :height-request 60
+				     :width-request 170))
 	 (add_button (make-instance 'gtk:button
 				    :label "Add to inventory"))
 	 (side_vbox (make-instance 'gtk:v-box))
@@ -767,12 +784,19 @@ and any data linked to it."
 
      (gtk:container-add vbox2 (make-instance 'gtk:h-separator))
 
-     (gtk:container-add inventory_vbox inventory)
-     (gtk:container-add inventory_vbox inventory_list)
+     (gtk:container-add inventory_hbox inventory)
+     (gtk:table-attach inventory_table (make-instance 'gtk:label :label "") 0 1 0 1)
+
+     (gtk:scrolled-window-add-with-viewport inventory_list inventory_table)
+     (gtk:container-add inventory_hbox inventory_list)
+
+     (gtk:container-add inventory_vbox inventory_hbox)
 
      (gtk:container-add item_hbox item_label)
      (gtk:container-add item_hbox item_image)
      (gtk:container-add inventory_vbox item_hbox)
+
+     (gtk:container-add inventory_vbox item_description)
 
      (gtk:container-add item_actions_hbox remove_item)
      (gtk:container-add item_actions_hbox move_item)
@@ -782,8 +806,15 @@ and any data linked to it."
      (gtk:container-add managing_hbox (make-instance 'gtk:v-separator))
 
      (gtk:container-add add_item_vbox add_item)
+     (gtk:container-add add_item_vbox (make-instance 'gtk:h-separator))
 
      (gtk:container-add new_item_hbox image_file_label)
+
+     (let ((image_filter (make-instance 'gtk:file-filter
+					:name "Image files (*.png, *.jpg, *.jpeg, *.tif, *.tiff, *.bmp)")))
+
+       (gtk:file-filter-add-pixbuf-formats image_filter)
+       (gtk:file-chooser-add-filter item_select_button image_filter))
 
      (gtk:container-add new_item_hbox item_select_button)
      (gtk:container-add add_item_vbox new_item_hbox)
@@ -791,6 +822,10 @@ and any data linked to it."
      (gtk:container-add naming_hbox new_item_name)
      (gtk:container-add naming_hbox item_entry)
      (gtk:container-add add_item_vbox naming_hbox)
+
+     (gtk:container-add description_hbox description_label)
+     (gtk:container-add description_hbox description)
+     (gtk:container-add add_item_vbox description_hbox)
 
      (gobject:g-signal-connect add_button "clicked"
 			       #'(lambda (b)
@@ -801,7 +836,8 @@ and any data linked to it."
 				       (failure "space_item")
 				     (add-to-inventory
 				      (gtk:entry-text item_entry)
-				      (gtk:file-chooser-filename item_select_button)))))
+				      (gtk:file-chooser-filename item_select_button)
+				      (gtk:text-buffer-text (gtk:text-view-buffer description))))))
 
      (gtk:container-add add_item_vbox add_button)
 
