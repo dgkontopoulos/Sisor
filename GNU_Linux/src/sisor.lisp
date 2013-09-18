@@ -6,6 +6,7 @@
 (defparameter *current-dir* "")
 (defparameter *db* "")
 (defparameter *entered-main-interface* 0)
+(defparameter *inv-count* 0)
 
 (defun about (window)
   (gtk:within-main-loop
@@ -159,9 +160,7 @@ Please, resolve the problem and try again."))
       (setf (gtk:message-dialog-text dialog) "Error when modifying the space's name")
       (setf (gtk:message-dialog-secondary-text dialog) "One of the following situations has occurred:
 
-<b>=></b> The name only contains whitespace characters.
-
-<b>=></b> The name contains illegal characters. Names can contain alphanumeric characters, spaces, '_', '-' and '.'.
+<b>=></b> The name contains illegal characters. Names can contain word characters and underscores.
 
 <b>=></b> The name was not changed.
 
@@ -245,6 +244,9 @@ Please, resolve the problem and try again.")))
 					  (gtk:file-chooser-filename dialog) "/"))
   (setf *space_name* "Untitled_space")
   (setf *db* (sqlite:connect (concatenate 'string *top-dir* "sisor.sqlite3")))
+  (setf *inv-count* 0)
+  (makunbound '*current-item*)
+  (makunbound '*current-item-name*)
   (gtk:object-destroy dialog)
   (gtk:object-destroy window)
 
@@ -443,9 +445,12 @@ Please, resolve the problem and try again.")))
   (setf *db* "")
 
   (setf *entered-main-interface* 0)
+  (setf *inv-count* 0)
 
   (makunbound '*space_name*)
-  (makunbound '*space_photo*))
+  (makunbound '*space_photo*)
+  (makunbound '*current-item*)
+  (makunbound '*current-item-name*))
 
 (defun delete-reask (window)
   (gtk:within-main-loop
@@ -512,19 +517,45 @@ and any data linked to it."
 
     (gtk:widget-show photo_dialog)))
 
-(defun add-to-inventory (name photo description)
+(defun make-inventory-entry (name name_field photo_field description
+				  description_field table remove_button)
+  (let ((event_box (make-instance 'gtk:event-box))
+	(event_label (make-instance 'gtk:label :label name)))
+
+    (gtk:container-add event_box event_label)
+    (gobject:connect-signal event_box "button_press_event"
+			    #'(lambda (a b)
+				(declare (ignorable b))
+				(setf *current-item* a)
+				(setf *current-item-name* name)
+				(setf (gtk:label-label name_field)
+				      (concatenate 'string "<i>" name "</i>"))
+				(setf (gtk:image-file photo_field)
+				      (concatenate 'string *current-dir* "items/" name))
+				(setf (gtk:text-buffer-text
+				       (gtk:text-view-buffer description_field)) description)
+				(setf (gtk:widget-sensitive remove_button) t)))
+
+    (gtk:table-attach table event_box 0 1 *inv-count* (+ *inv-count* 1))
+    (incf *inv-count*)
+
+    (gtk:widget-show table)))
+
+(defun add-to-inventory (name photo description inventory name_field
+			      photo_field description_field table remove_button)
   (sqlite:execute-non-query *db*
-			    (concatenate 'string "insert into " *space_name*
-					 "(item, location, description) values(?, ?, ?)")
+			    (concatenate 'string "insert into '" *space_name*
+					 "' (item, location, description) values (?, ?, ?)")
 			    name *space_name* description)
 
   (asdf:run-shell-command (concatenate 'string "convert '"
 				       photo "' -resize 202x102! '" *current-dir*
 				       "items/" name "'"))
 
-  (setf *current_inventory* (sqlite:execute-to-list *db*
-						    (concatenate 'string "select item from '"
-								 *space_name* "'"))))
+  (setf (gtk:widget-sensitive inventory) t)
+
+  (make-inventory-entry name name_field photo_field description
+			description_field table remove_button))
 
 (defun modify-space-name (button)
   (let ((dialog (make-instance 'gtk:message-dialog
@@ -544,10 +575,10 @@ and any data linked to it."
 				      ((eq response -5)
 				       (if (or
 					    (not (eq
-						  (cl-ppcre:scan "^\\s*$" (gtk:entry-text entry)) nil))
+						  (cl-ppcre:scan "\\d" (gtk:entry-text entry)) nil))
 
 					    (eq (cl-ppcre:scan
-						 "^(\\w|\\s|-|\\.)+$" (gtk:entry-text entry)) nil)
+						 "^\\w+$" (gtk:entry-text entry)) nil)
 
 					    (string-equal (gtk:entry-text entry) *space_name*)
 
@@ -562,7 +593,7 @@ and any data linked to it."
 					   (sqlite:execute-non-query *db*
 								     (concatenate 'string "alter table '"
 										  *space_name* "' rename to '"
-										  (gtk:entry-text entry) "'"))
+										  (gtk:entry-text entry) "';"))
 
 					   (setf *current-dir* (concatenate 'string *top-dir*
 									    (gtk:entry-text entry) "/"))
@@ -572,6 +603,26 @@ and any data linked to it."
 					   (gtk:object-destroy dialog)))))))
 
     (gtk:widget-show dialog)))
+
+(defun remove-item (button label image description)
+  (if (boundp '*current-item*)
+      (progn
+	(gtk:object-destroy *current-item*)
+
+	(delete-file (concatenate 'string *current-dir* "items/"
+				  *current-item-name*))
+
+	(sqlite:execute-non-query *db*
+				  (concatenate 'string "delete from '" *space_name*
+					       "' where item = '" *current-item-name* "'"))
+
+	(makunbound '*current-item*)
+	(makunbound '*current-item-name*)
+
+	(setf (gtk:label-label label) "<i>Item name</i>")
+	(setf (gtk:image-file image) "./images/default_item.png")
+	(setf (gtk:text-buffer-text (gtk:text-view-buffer description)) "")
+	(setf (gtk:widget-sensitive button) nil))))
 
 (defun main-interface ()
   (gtk:within-main-loop
@@ -623,15 +674,15 @@ and any data linked to it."
 	 (delete_image (make-instance 'gtk:button :label "Remove the photo"))
 	 (managing_hbox (make-instance 'gtk:h-box
 				       :spacing 20))
-	 (inventory_vbox (make-instance 'gtk:v-box :sensitive nil))
+	 (inventory_vbox (make-instance 'gtk:v-box :sensitive nil :spacing 5))
 	 (inventory_hbox (make-instance 'gtk:h-box))
 	 (inventory (make-instance 'gtk:label
 				   :label "<b>Inventory:</b>"
 				   :use-markup t))
 	 (inventory_list (make-instance 'gtk:scrolled-window
-					:height-request 35
+					:height-request 45
 					:width-request 180))
-	 (inventory_table (make-instance 'gtk:table :n-rows 2 :n-cols 2))
+	 (inventory_table (make-instance 'gtk:table))
 	 (item_hbox (make-instance 'gtk:h-box))
 	 (item_label (make-instance 'gtk:label
 				    :label "<i>Item name</i>"
@@ -785,7 +836,22 @@ and any data linked to it."
      (gtk:container-add vbox2 (make-instance 'gtk:h-separator))
 
      (gtk:container-add inventory_hbox inventory)
-     (gtk:table-attach inventory_table (make-instance 'gtk:label :label "") 0 1 0 1)
+
+     (dolist (item (sort (sqlite:execute-to-list *db*
+						 (concatenate 'string "select item from '"
+							      *space_name* "'"))
+			 #'string< :key #'car))
+
+       (incf *inv-count*)
+       (setf item (car item))
+
+       (make-inventory-entry item item_label item_image
+			     (caar (sqlite:execute-to-list *db*
+							   (concatenate 'string "select description from '"
+									*space_name* "' where item='" item "'")))
+			     item_description inventory_table remove_item))
+
+     (if (> *inv-count* 0) (setf (gtk:widget-sensitive inventory_vbox) t))
 
      (gtk:scrolled-window-add-with-viewport inventory_list inventory_table)
      (gtk:container-add inventory_hbox inventory_list)
@@ -798,7 +864,13 @@ and any data linked to it."
 
      (gtk:container-add inventory_vbox item_description)
 
+     (gobject:g-signal-connect remove_item "clicked"
+			       #'(lambda (a)
+				   (declare (ignorable a))
+				   (remove-item remove_item item_label item_image
+						item_description)))
      (gtk:container-add item_actions_hbox remove_item)
+
      (gtk:container-add item_actions_hbox move_item)
      (gtk:container-add inventory_vbox item_actions_hbox)
 
@@ -830,14 +902,21 @@ and any data linked to it."
      (gobject:g-signal-connect add_button "clicked"
 			       #'(lambda (b)
 				   (declare (ignorable b))
-				   (if (or (not (eq (cl-ppcre:scan "^\\s*$" (gtk:entry-text item_entry)) nil))
-					   (eq (cl-ppcre:scan "png|jpg|jpeg|gif$" (gtk:file-chooser-filename item_select_button)) nil)
+				   (if (or (not (eq (cl-ppcre:scan "^\\s*$"
+								   (gtk:entry-text item_entry)) nil))
+					   (eq (cl-ppcre:scan "png|jpg|jpeg|gif$"
+							      (gtk:file-chooser-filename item_select_button)) nil)
 					   (not (readable-p (gtk:file-chooser-filename item_select_button))))
 				       (failure "space_item")
 				     (add-to-inventory
 				      (gtk:entry-text item_entry)
 				      (gtk:file-chooser-filename item_select_button)
-				      (gtk:text-buffer-text (gtk:text-view-buffer description))))))
+				      (gtk:text-buffer-text (gtk:text-view-buffer description))
+				      inventory_vbox
+				      item_label
+				      item_image
+				      item_description
+				      inventory_table))))
 
      (gtk:container-add add_item_vbox add_button)
 
