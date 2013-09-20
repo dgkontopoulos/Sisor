@@ -26,6 +26,7 @@ inspired from <b><i><a href='http://en.wikipedia.org/wiki/Sisor'>Sisor rabdophor
 					:type :toplevel
 					:border-width 10
 					:window-position :mouse
+					:resizable nil
 					:destroy-with-parent t
 					:transient-for window))
 	   (vbox (make-instance 'gtk:v-box))
@@ -113,7 +114,7 @@ PARTICULAR PURPOSE.</i></span>
        (gtk:container-add about_window vbox)
        (gtk:widget-show about_window :all :t)))))
 
-(defun directory-check-and-proceed (status dir)
+(defun directory-check (status dir)
   (setf dir (cl-ppcre:regex-replace "/?$" dir "/"))
   (and
    (cl-fad:directory-exists-p dir)
@@ -124,7 +125,8 @@ PARTICULAR PURPOSE.</i></span>
    (cond ((string-equal status "new")
 	  (eql (list-length (directory (concatenate 'string dir "*.*"))) 0))
 	 ((string-equal status "open")
-	  (cl-fad:file-exists-p (concatenate 'string dir "sisor.sqlite3"))))))
+	  (cl-fad:file-exists-p (concatenate 'string dir "sisor.sqlite3")))
+	 ((string-equal status "import") t))))
 
 (defun failure (item)
   (let ((dialog
@@ -173,16 +175,26 @@ PARTICULAR PURPOSE.</i></span>
 
 <b>=></b> Sisor does not have the permissions to read that file.
 
-<b>=></b> A name for the item was not provided."))
+<b>=></b> A name for the item was not provided.
+
+<b>=></b> There is already an item with this name in this space."))
+     ((string-equal item "import")
+      (setf (gtk:message-dialog-text dialog) "Importing Error")
+      (setf (gtk:message-dialog-secondary-text dialog) "
+<b>=></b> A Sisor Project file and/or an output directory were not selected.
+
+<b>=></b> Sisor does not have the permissions to read the file.
+
+<b>=></b> Sisor does not have the permissions to create files in the directory."))
      ((string-equal item "export")
       (setf (gtk:message-dialog-text dialog) "Exporting Error")
       (setf (gtk:message-dialog-secondary-text dialog) "
 <b>=></b> There is already a file with the same name at the specified destination.
 
-<b>=></b> Sisor does not have the permissions to create the file at that directory.")))
+<b>=></b> Sisor does not have the permissions to create the file it that directory.")))
 
-(setf (gtk:message-dialog-secondary-text dialog)
-	(concatenate 'string "One of the following situations has occurred:
+    (setf (gtk:message-dialog-secondary-text dialog)
+	  (concatenate 'string "One of the following situations has occurred:
 " (gtk:message-dialog-secondary-text dialog) "
 
 Please, resolve the problem and try again."))
@@ -276,17 +288,218 @@ Please, resolve the problem and try again."))
 				       (gtk:object-destroy dir_dialog))
 				      ((eq response -5)
 				       (cond ((string-equal status "new")
-					      (if (directory-check-and-proceed "new"
-									       (gtk:file-chooser-filename dir_dialog))
+					      (if (directory-check "new"
+								   (gtk:file-chooser-filename dir_dialog))
 						  (prepare-main-interface window dir_dialog "new")
 						(failure "new-directory")))
 					     ((string-equal status "open")
-					      (if (directory-check-and-proceed "open"
-									       (gtk:file-chooser-filename dir_dialog))
+					      (if (directory-check "open"
+								   (gtk:file-chooser-filename dir_dialog))
 						  (prepare-main-interface window dir_dialog "open")
 						(failure "open-directory"))))))))
 
     (gtk:widget-show dir_dialog)))
+
+(defun readable-p (file)
+  (and
+   (cl-fad:file-exists-p file)
+   (ignore-errors (open file))))
+
+(defun import-success (import_dialog dir)
+  (let ((dialog (make-instance 'gtk:message-dialog
+			       :message-type :info
+			       :buttons :ok
+			       :text "Success!"
+			       :secondary-text
+			       (concatenate 'string
+					    "The Project's top directory is now located inside "
+					    dir " ."))))
+
+    (gobject:connect-signal dialog "response"
+			    #'(lambda (dialog response)
+				(gtk:object-destroy dialog)
+				(gtk:object-destroy import_dialog)))
+
+    (gtk:widget-show dialog)))
+
+(defun import-project (window)
+  (let ((dialog (make-instance 'gtk:dialog
+			       :window-position :center
+			       :title "Import a Sisor Project"
+			       :resizable nil
+			       :border-width 5))
+	(vbox (make-instance 'gtk:v-box))
+	(file_hbox (make-instance 'gtk:h-box :spacing 10))
+	(input_chooser (make-instance 'gtk:file-chooser-button
+				      :select-multiple nil
+				      :width-chars 14))
+	(file_filter (make-instance 'gtk:file-filter
+				    :name "Compressed tar archives (*.tar.gz)"))
+	(dir_hbox (make-instance 'gtk:h-box :spacing 10))
+	(output_chooser (make-instance 'gtk:file-chooser-button
+				       :title "Select a directory for the Sisor Project"
+				       :action :select-folder))
+	(input_file "")
+	(output_dir ""))
+
+    (gtk:container-add file_hbox
+		       (make-instance 'gtk:label
+				      :label "<b>Sisor Project file:</b>"
+				      :use-markup t))
+
+    (gtk:file-filter-add-pattern file_filter "*.tar.gz")
+    (gtk:file-chooser-add-filter input_chooser file_filter)
+    (gtk:container-add file_hbox input_chooser)
+    (gtk:container-add vbox file_hbox)
+
+    (gtk:container-add dir_hbox
+		       (make-instance 'gtk:label
+				      :label "<b>Output directory:</b>"
+				      :use-markup t))
+    (gtk:container-add dir_hbox output_chooser)
+    (gtk:container-add vbox dir_hbox)
+
+    (gtk:dialog-add-button dialog "gtk-cancel" :cancel)
+    (gtk:dialog-add-button dialog "gtk-ok" :ok)
+
+    (gobject:connect-signal dialog "response"
+			    #'(lambda (photo_dialog response)
+				(cond ((eq response -6)
+				       (gtk:object-destroy dialog))
+				      ((eq response -5)
+
+				       (setf input_file (gtk:file-chooser-filename input_chooser))
+				       (setf output_dir (gtk:file-chooser-filename output_chooser))
+
+				       (if (and
+					    (not (eq input_file nil))
+					    (readable-p input_file)
+					    (not (eq output_dir nil))
+					    (directory-check "import" output_dir))
+					   (progn
+					     (asdf:run-shell-command (concatenate 'string
+										  "tar xzf '" input_file "' -C '"
+										  output_dir "'"))
+					     (import-success dialog output_dir))
+					 (failure "import"))))))
+
+    (gtk:container-add (gtk:dialog-content-area dialog) vbox)
+    (gtk:widget-show dialog)))
+
+(defun create-menubar (window)
+  (let ((menubar (make-instance 'gtk:menu-bar))
+
+	(menu_item_project (make-instance 'gtk:menu-item :label "Project"))
+	(menu_project (make-instance 'gtk:menu))
+
+	(menu_project_new (make-instance 'gtk:menu-item :label "New Project"))
+	(menu_project_open (make-instance 'gtk:menu-item :label "Open Project"))
+	(menu_project_delete (make-instance 'gtk:menu-item :label "Delete Project"))
+	(menu_project_import (make-instance 'gtk:menu-item :label "Import Project"))
+	(menu_project_export (make-instance 'gtk:menu-item :label "Export Project"))
+	(menu_project_close (make-instance 'gtk:menu-item :label "Close Project"))
+	(menu_project_exit (make-instance 'gtk:menu-item :label "Exit"))
+
+	(menu_item_help (make-instance 'gtk:menu-item :label "Help"))
+	(menu_help (make-instance 'gtk:menu))
+
+	(menu_help_cl (make-instance 'gtk:menu-item :label "About Common Lisp"))
+	(menu_help_clgtk2 (make-instance 'gtk:menu-item :label "About CL-GTK2"))
+	(menu_help_sisor (make-instance 'gtk:menu-item :label "About Sisor")))
+
+    (if (eq *entered-main-interface* 0)
+	(progn
+	  (setf (gtk:widget-sensitive menu_project_delete) nil)
+	  (setf (gtk:widget-sensitive menu_project_export) nil)
+	  (setf (gtk:widget-sensitive menu_project_close) nil)))
+
+    (gobject:g-signal-connect menu_project_new "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (get-project window "new")))
+    (gtk:menu-shell-append menu_project menu_project_new)
+
+    (gobject:g-signal-connect menu_project_open "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (get-project window "open")))
+    (gtk:menu-shell-append menu_project menu_project_open)
+
+    (gtk:menu-shell-append menu_project
+			   (make-instance 'gtk:separator-menu-item))
+
+    (gobject:g-signal-connect menu_project_delete "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (delete-reask window)))
+    (gtk:menu-shell-append menu_project menu_project_delete)
+
+    (gtk:menu-shell-append menu_project
+			   (make-instance 'gtk:separator-menu-item))
+
+    (gobject:g-signal-connect menu_project_import "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (import-project window)))
+    (gtk:menu-shell-append menu_project menu_project_import)
+
+    (gobject:g-signal-connect menu_project_export "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (export-project)))
+    (gtk:menu-shell-append menu_project menu_project_export)
+
+    (gtk:menu-shell-append menu_project
+			   (make-instance 'gtk:separator-menu-item))
+
+    (gobject:g-signal-connect menu_project_close "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (start-from-scratch "nodelete")
+				  (starting-popup)
+				  (gtk:object-destroy window)))
+    (gtk:menu-shell-append menu_project menu_project_close)
+
+    (gobject:g-signal-connect menu_project_exit "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (if (eq *entered-main-interface* 1)
+				      (sqlite:disconnect *db*))
+				  (exit :abort t)))
+    (gtk:menu-shell-append menu_project menu_project_exit)
+
+    (setf (gtk:menu-item-submenu menu_item_project) menu_project)
+
+    (gtk:menu-shell-append menubar menu_item_project)
+
+    (gobject:g-signal-connect menu_help_cl "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (asdf:run-shell-command
+				   "x-www-browser https://en.wikipedia.org/wiki/Common_Lisp&")))
+    (gtk:menu-shell-append menu_help menu_help_cl)
+
+    (gobject:g-signal-connect menu_help_clgtk2 "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (asdf:run-shell-command
+				   "x-www-browser http://www.cliki.net/cl-gtk2&")))
+    (gtk:menu-shell-append menu_help menu_help_clgtk2)
+
+    (gtk:menu-shell-append menu_help
+			   (make-instance 'gtk:separator-menu-item))
+
+    (gobject:g-signal-connect menu_help_sisor "activate"
+			      #'(lambda (a)
+				  (declare (ignorable a))
+				  (about window)))
+    (gtk:menu-shell-append menu_help menu_help_sisor)
+
+    (setf (gtk:menu-item-submenu menu_item_help) menu_help)
+
+    (gtk:menu-shell-append menubar menu_item_help)
+
+    menubar))
 
 (defun starting-popup ()
   (gtk:within-main-loop
@@ -310,7 +523,7 @@ Please, resolve the problem and try again."))
 	 (name_logo (make-instance 'gtk:image
 				   :file "./images/sisor_name.png"))
 
-	 (buttons_vbox_1 (make-instance 'gtk:v-box :spacing 50))
+	 (buttons_vbox_1 (make-instance 'gtk:v-box :spacing 30))
 
 	 (new_event (make-instance 'gtk:event-box))
 	 (new_hbox (make-instance 'gtk:h-box :spacing 5))
@@ -330,7 +543,7 @@ Please, resolve the problem and try again."))
 				     :label "<b>About Sisor</b>"
 				     :use-markup t))
 
-	 (buttons_vbox_2 (make-instance 'gtk:v-box :spacing 50))
+	 (buttons_vbox_2 (make-instance 'gtk:v-box :spacing 30))
 
 	 (open_event (make-instance 'gtk:event-box))
 	 (open_hbox (make-instance 'gtk:h-box :spacing 5))
@@ -351,6 +564,8 @@ Please, resolve the problem and try again."))
 				    :use-markup t))
 
 	 (buttons_hbox (make-instance 'gtk:h-box :spacing 20)))
+
+     (gtk:container-add hbox_main (create-menubar window))
 
      (gtk:container-add hbox_main fish_logo)
 
@@ -433,8 +648,9 @@ Please, resolve the problem and try again."))
     (if (not (boundp '*space_photo*)) "./images/default_space.png" *space_photo*))
    (t "")))
 
-(defun start-from-scratch ()
-  (cl-fad:delete-directory-and-files *top-dir*)
+(defun start-from-scratch (&optional status)
+  (if (eq status nil)
+      (cl-fad:delete-directory-and-files *top-dir*))
   (setf *top-dir* "")
   (setf *current-dir* "")
 
@@ -469,11 +685,6 @@ and any data linked to it."
 					(gtk:object-destroy window)))))
 
      (gtk:widget-show dialog))))
-
-(defun readable-p (file)
-  (and
-   (cl-fad:file-exists-p file)
-   (ignore-errors (open file))))
 
 (defun writable-and-new-p (file)
   (and
@@ -606,7 +817,7 @@ and any data linked to it."
 
     (gtk:widget-show dialog)))
 
-(defun remove-item (button label image description)
+(defun remove-item (button image description)
   (if (boundp '*current-item*)
       (progn
 	(gtk:object-destroy *current-item*)
@@ -621,7 +832,6 @@ and any data linked to it."
 	(makunbound '*current-item*)
 	(makunbound '*current-item-name*)
 
-	(setf (gtk:label-label label) "<i>Item name</i>")
 	(setf (gtk:image-file image) "./images/default_item.png")
 	(setf (gtk:text-buffer-text (gtk:text-view-buffer description)) "")
 	(setf (gtk:widget-sensitive button) nil))))
@@ -656,14 +866,20 @@ and any data linked to it."
 
 				       (if (writable-and-new-p filename)
 					   (progn
-					     (asdf:run-shell-command (concatenate 'string
-										  "tar czf '" filename "' '"
-										  *top-dir* "'"))
+					     (asdf:run-shell-command
+					      (concatenate 'string "tar czf '" filename
+							   "' -C '" *top-dir* "../' '"
+							   (cl-ppcre:scan-to-strings "\\w+/$" *top-dir*)
+							   "'"))
 					     (gtk:object-destroy dialog))
 					 (failure "export"))))))
 
     (gtk:widget-show dialog)))
 
+(defun exists-in-db-p (item)
+  (not (endp (sqlite:execute-to-list *db*
+				     (concatenate 'string "select item from '"
+						  *space_name* "' where item = ?") item))))
 
 (defun main-interface ()
   (gtk:within-main-loop
@@ -674,26 +890,7 @@ and any data linked to it."
 						      :file "./images/sisor_fish.png"))
 				:type :toplevel
 				:window-position :center
-				:resize nil))
-
-	 (menubar (make-instance 'gtk:menu-bar))
-
-	 (menu_item_project (make-instance 'gtk:menu-item :label "Project"))
-	 (menu_project (make-instance 'gtk:menu))
-
-	 (menu_project_new (make-instance 'gtk:menu-item :label "New Project"))
-	 (menu_project_open (make-instance 'gtk:menu-item :label "Open Project"))
-	 (menu_project_delete (make-instance 'gtk:menu-item :label "Delete Project"))
-	 (menu_project_import (make-instance 'gtk:menu-item :label "Import Project"))
-	 (menu_project_export (make-instance 'gtk:menu-item :label "Export Project"))
-	 (menu_project_exit (make-instance 'gtk:menu-item :label "Exit"))
-
-	 (menu_item_help (make-instance 'gtk:menu-item :label "Help"))
-	 (menu_help (make-instance 'gtk:menu))
-
-	 (menu_help_cl (make-instance 'gtk:menu-item :label "About Common Lisp"))
-	 (menu_help_clgtk2 (make-instance 'gtk:menu-item :label "About CL-GTK2"))
-	 (menu_help_sisor (make-instance 'gtk:menu-item :label "About Sisor"))
+				:resizable nil))
 
 	 (vbox1 (make-instance 'gtk:v-box :spacing 5))
 	 (hbox1 (make-instance 'gtk:h-box))
@@ -759,7 +956,7 @@ and any data linked to it."
 				   :label "Move to another space"
 				   :sensitive nil))
 	 (add_item_vbox (make-instance 'gtk:v-box
-				       :spacing 10))
+				       :spacing 18))
 	 (add_item (make-instance 'gtk:label
 				  :label "<b>Add new item</b>"
 				  :use-markup t))
@@ -789,80 +986,7 @@ and any data linked to it."
 				      :use-markup t))
 	 (spaces_list (make-instance 'gtk:tree-view)))
 
-     (gobject:g-signal-connect menu_project_new "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (get-project window "new")))
-     (gtk:menu-shell-append menu_project menu_project_new)
-
-     (gobject:g-signal-connect menu_project_open "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (get-project window "open")))
-     (gtk:menu-shell-append menu_project menu_project_open)
-
-     (gtk:menu-shell-append menu_project
-			    (make-instance 'gtk:separator-menu-item))
-
-     (gobject:g-signal-connect menu_project_delete "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (delete-reask window)))
-     (gtk:menu-shell-append menu_project menu_project_delete)
-
-     (gtk:menu-shell-append menu_project
-			    (make-instance 'gtk:separator-menu-item))
-
-     (gtk:menu-shell-append menu_project menu_project_import)
-
-     (gobject:g-signal-connect menu_project_export "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (export-project)))
-     (gtk:menu-shell-append menu_project menu_project_export)
-
-     (gtk:menu-shell-append menu_project
-			    (make-instance 'gtk:separator-menu-item))
-
-     (gobject:g-signal-connect menu_project_exit "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (sqlite:disconnect *db*)
-				   (exit :abort t)))
-     (gtk:menu-shell-append menu_project menu_project_exit)
-
-     (setf (gtk:menu-item-submenu menu_item_project) menu_project)
-
-     (gtk:menu-shell-append menubar menu_item_project)
-
-     (gobject:g-signal-connect menu_help_cl "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (asdf:run-shell-command
-				    "x-www-browser https://en.wikipedia.org/wiki/Common_Lisp&")))
-     (gtk:menu-shell-append menu_help menu_help_cl)
-
-     (gobject:g-signal-connect menu_help_clgtk2 "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (asdf:run-shell-command
-				    "x-www-browser http://www.cliki.net/cl-gtk2&")))
-     (gtk:menu-shell-append menu_help menu_help_clgtk2)
-
-     (gtk:menu-shell-append menu_help
-			    (make-instance 'gtk:separator-menu-item))
-
-     (gobject:g-signal-connect menu_help_sisor "activate"
-			       #'(lambda (a)
-				   (declare (ignorable a))
-				   (about window)))
-     (gtk:menu-shell-append menu_help menu_help_sisor)
-
-     (setf (gtk:menu-item-submenu menu_item_help) menu_help)
-
-     (gtk:menu-shell-append menubar menu_item_help)
-
-     (gtk:container-add vbox1 menubar)
+     (gtk:container-add vbox1 (create-menubar window))
 
      (gtk:container-add vbox1 toolbar)
      (gtk:container-add toolbar hbox1)
@@ -1036,6 +1160,7 @@ and any data linked to it."
 								   (gtk:entry-text item_entry)) nil))
 					   (eq (cl-ppcre:scan "png|jpg|jpeg|gif$"
 							      (gtk:file-chooser-filename item_select_button)) nil)
+					   (exists-in-db-p (gtk:entry-text item_entry))
 					   (not (readable-p (gtk:file-chooser-filename item_select_button))))
 				       (failure "space_item")
 				     (add-to-inventory
