@@ -7,6 +7,7 @@
 (defparameter *db* "")
 (defparameter *entered-main-interface* 0)
 (defparameter *inv-count* 0)
+(defparameter *spaces-count* 0)
 
 (defun about (window)
   (gtk:within-main-loop
@@ -155,6 +156,8 @@ PARTICULAR PURPOSE.</i></span>
      ((string-equal item "modify-name")
       (setf (gtk:message-dialog-text dialog) "Error when modifying the space's name")
       (setf (gtk:message-dialog-secondary-text dialog) "
+<b>=></b> There is already a space with that name in the current Project.
+
 <b>=></b> The name contains illegal characters. Names can contain word characters and underscores.
 
 <b>=></b> The name was not changed."))
@@ -178,6 +181,12 @@ PARTICULAR PURPOSE.</i></span>
 <b>=></b> A name for the item was not provided.
 
 <b>=></b> There is already an item with this name in this space."))
+     ((string-equal item "add-space")
+      (setf (gtk:message-dialog-text dialog) "Error when adding a new space")
+      (setf (gtk:message-dialog-secondary-text dialog) "
+<b>=></b> There is already a space with that name in the current Project.
+
+<b>=></b> The name contains illegal characters. Names can contain word characters and underscores."))
      ((string-equal item "import")
       (setf (gtk:message-dialog-text dialog) "Importing Error")
       (setf (gtk:message-dialog-secondary-text dialog) "
@@ -215,10 +224,10 @@ Please, resolve the problem and try again."))
 	(item text, location text, previous_locations text, description text)")
 	(setf *current-dir* (concatenate 'string *top-dir* "Untitled_space/")))
     (progn
-      (ensure-directories-exist (concatenate 'string *top-dir* name "/"))
+      (ensure-directories-exist (concatenate 'string *top-dir* name "/items/"))
       (sqlite:execute-non-query *db*
 				(concatenate 'string "create table '" name
-					     "' (item text, location text, previous_locations text)"))
+					     "' (item text, location text, previous_locations text, description text)"))
       (setf *current-dir* (concatenate 'string *top-dir* name "/")))))
 
 (defun find-spaces (dirs spaces_list)
@@ -254,6 +263,7 @@ Please, resolve the problem and try again."))
   (setf *space_name* "Untitled_space")
   (setf *db* (sqlite:connect (concatenate 'string *top-dir* "sisor.sqlite3")))
   (setf *inv-count* 0)
+  (setf *spaces-count* 0)
   (makunbound '*current-item*)
   (makunbound '*current-item-name*)
   (gtk:object-destroy dialog)
@@ -386,6 +396,77 @@ Please, resolve the problem and try again."))
     (gtk:container-add (gtk:dialog-content-area dialog) vbox)
     (gtk:widget-show dialog)))
 
+(defun delete-reask (status window &key name hbox name_button photo
+			    button1 button2)
+  (cond ((string-equal status "project")
+	 (let ((dialog (make-instance 'gtk:message-dialog
+				      :message-type :warning
+				      :buttons :yes-no
+				      :text "This action will delete the current project
+and any data linked to it."
+				      :secondary-text "Is that OK?")))
+
+	   (gobject:connect-signal dialog "response"
+				   #'(lambda (dialog response)
+				       (cond ((eq response -9)
+					      (gtk:object-destroy dialog))
+					     ((eq response -8)
+					      (start-from-scratch)
+					      (starting-popup)
+					      (gtk:object-destroy dialog)
+					      (gtk:object-destroy window)))))
+
+	   (gtk:widget-show dialog)))
+	((and (eq *spaces-count* 2) (string-equal status "space"))
+	 (let ((dialog (make-instance 'gtk:message-dialog
+				      :message-type :warning
+				      :buttons :yes-no
+				      :text (concatenate 'string "This is the last space for this Project.")
+				      :secondary-text "Do you want to delete the Project?")))
+
+	   (gobject:connect-signal dialog "response"
+				   #'(lambda (dialog response)
+				       (cond ((eq response -9)
+					      (gtk:object-destroy dialog))
+					     ((eq response -8)
+					      (start-from-scratch)
+					      (starting-popup)
+					      (gtk:object-destroy dialog)
+					      (gtk:object-destroy window)))))
+
+	   (gtk:widget-show dialog)))
+	((string-equal status "space")
+	 (let ((dialog (make-instance 'gtk:message-dialog
+				      :message-type :warning
+				      :buttons :yes-no
+				      :text (concatenate 'string "This action will delete '" name
+							 "' and any data linked to it.")
+				      :secondary-text "Is that OK?")))
+
+	   (gobject:connect-signal dialog "response"
+				   #'(lambda (dialog response)
+				       (cond ((eq response -9)
+					      (gtk:object-destroy dialog))
+					     ((eq response -8)
+					      (cl-fad:delete-directory-and-files
+					       (concatenate 'string *top-dir* name "/"))
+
+					      (sqlite:execute-non-query *db*
+									(concatenate 'string "drop table '" name "'"))
+
+					      (setf *space_name*
+						    (car (find-spaces
+							  (directory (concatenate 'string *top-dir* "*/"))
+							  '())))
+					      (setf *current-dir*
+						    (concatenate 'string *space_name* "/"))
+					      (switch-space name_button photo button1 button2)
+					      (decf *spaces-count*)
+					      (gtk:object-destroy hbox)
+					      (gtk:object-destroy dialog)))))
+
+	   (gtk:widget-show dialog)))))
+
 (defun create-menubar (window)
   (let ((menubar (make-instance 'gtk:menu-bar))
 
@@ -431,7 +512,7 @@ Please, resolve the problem and try again."))
     (gobject:g-signal-connect menu_project_delete "activate"
 			      #'(lambda (a)
 				  (declare (ignorable a))
-				  (delete-reask window)))
+				  (delete-reask "project" window)))
     (gtk:menu-shell-append menu_project menu_project_delete)
 
     (gtk:menu-shell-append menu_project
@@ -659,38 +740,17 @@ Please, resolve the problem and try again."))
 
   (setf *entered-main-interface* 0)
   (setf *inv-count* 0)
+  (setf *spaces-count* 0)
 
   (makunbound '*space_name*)
   (makunbound '*space_photo*)
   (makunbound '*current-item*)
   (makunbound '*current-item-name*))
 
-(defun delete-reask (window)
-  (gtk:within-main-loop
-   (let ((dialog (make-instance 'gtk:message-dialog
-				:message-type :warning
-				:buttons :yes-no
-				:text "This action will delete the current project
-and any data linked to it."
-				:secondary-text "Is that OK?")))
-
-     (gobject:connect-signal dialog "response"
-			     #'(lambda (dialog response)
-				 (cond ((eq response -9)
-					(gtk:object-destroy dialog))
-				       ((eq response -8)
-					(start-from-scratch)
-					(starting-popup)
-					(gtk:object-destroy dialog)
-					(gtk:object-destroy window)))))
-
-     (gtk:widget-show dialog))))
-
 (defun writable-and-new-p (file)
   (and
    (not (cl-fad:file-exists-p file))
-   (ignore-errors (open file :direction :probe
-			:if-does-not-exist :create))
+   (ignore-errors (open file :direction :probe :if-does-not-exist :create))
    (ignore-errors(delete-file file))))
 
 (defun prepare-main-photo (photo_object button1 button2 photo_file)
@@ -735,9 +795,11 @@ and any data linked to it."
 (defun make-inventory-entry (name photo_field description description_field
 				  table remove_button)
   (let ((event_box (make-instance 'gtk:event-box))
+	(hbox (make-instance 'gtk:h-box))
 	(event_label (make-instance 'gtk:label :label name)))
 
-    (gtk:container-add event_box event_label)
+    (gtk:box-pack-start hbox event_label :expand nil)
+    (gtk:container-add event_box hbox)
     (gobject:connect-signal event_box "button_press_event"
 			    #'(lambda (a b)
 				(declare (ignorable b))
@@ -748,6 +810,10 @@ and any data linked to it."
 				(setf (gtk:text-buffer-text
 				       (gtk:text-view-buffer description_field)) description)
 				(setf (gtk:widget-sensitive remove_button) t)))
+
+    (if (evenp *inv-count*)
+	(gtk:widget-modify-bg event_box 0 (gdk:color-parse "#FFFFC2"))
+      (gtk:widget-modify-bg event_box 0 (gdk:color-parse "#E0E4E4")))
 
     (gtk:table-attach table event_box 0 1 *inv-count* (+ *inv-count* 1))
     (incf *inv-count*)
@@ -770,7 +836,7 @@ and any data linked to it."
   (make-inventory-entry name photo_field description description_field
 			table remove_button))
 
-(defun modify-space-name (button)
+(defun rename-space (button window table name photo button1 button2 spaces_list vbox)
   (let ((dialog (make-instance 'gtk:message-dialog
 			       :message-type :other
 			       :buttons :ok-cancel
@@ -796,7 +862,11 @@ and any data linked to it."
 					    (string-equal (gtk:entry-text entry) *space_name*)
 
 					    (string-equal (gtk:entry-text entry)
-							  (concatenate 'string *space_name* "/")))
+							  (concatenate 'string *space_name* "/"))
+
+					    (cl-fad:directory-exists-p
+					     (concatenate 'string *top-dir*
+							  (gtk:entry-text entry) "/")))
 					   (failure "modify-name")
 					 (progn
 					   (rename-file *current-dir*
@@ -813,6 +883,13 @@ and any data linked to it."
 
 					   (setf *space_name* (gtk:entry-text entry))
 					   (setf (gtk:button-label button) (gtk:entry-text entry))
+
+					   (setf *spaces-count* 0)
+					   (gtk:object-destroy table)
+					   (let ((table (make-instance 'gtk:table)))
+					     (list-existing-spaces table window name photo button1
+								   button2 spaces_list)
+					     (gtk:widget-show vbox))
 					   (gtk:object-destroy dialog)))))))
 
     (gtk:widget-show dialog)))
@@ -881,6 +958,156 @@ and any data linked to it."
 				     (concatenate 'string "select item from '"
 						  *space_name* "' where item = ?") item))))
 
+(defun switch-space (name_button photo button1 button2)
+  (setf (gtk:button-label name_button) *space_name*)
+
+  (if (cl-fad:file-exists-p
+       (concatenate 'string *current-dir* "space_photo"))
+      (progn
+	(setf *space_photo*
+	      (concatenate 'string *current-dir* "space_photo"))
+	(setf (gtk:image-file photo) *space_photo*)
+	(setf (gtk:button-label button1) "Select another photo")
+	(setf (gtk:widget-sensitive button2) t))
+    (progn
+      (makunbound '*space_photo*)
+      (setf (gtk:image-file photo) "./images/default_space.png")
+      (setf (gtk:button-label button1) "Select a photo for this space")
+      (setf (gtk:widget-sensitive button2) nil))))
+
+(defun add-space (table window name_button photo button1 button2)
+  (let ((dialog (make-instance 'gtk:message-dialog
+			       :message-type :other
+			       :buttons :ok-cancel
+			       :text "Enter a name for the new space:"))
+	(entry (make-instance 'gtk:entry
+			      :max-length 100)))
+
+    (gtk:container-add (gtk:dialog-content-area dialog) entry)
+
+    (gobject:connect-signal dialog "response"
+			    #'(lambda (dialog response)
+				(cond ((eq response -6)
+				       (gtk:object-destroy dialog))
+				      ((eq response -5)
+				       (if (or
+					    (not (eq
+						  (cl-ppcre:scan "\\d" (gtk:entry-text entry)) nil))
+
+					    (eq (cl-ppcre:scan
+						 "^\\w+$" (gtk:entry-text entry)) nil)
+
+					    (cl-fad:directory-exists-p
+					     (concatenate 'string *top-dir*
+							  (gtk:entry-text entry) "/")))
+					   (failure "add-space")
+					 (progn
+					   (create-space (gtk:entry-text entry))
+					   (make-space-entry "space" window table
+							     :name (gtk:entry-text entry)
+							     :name_button name_button
+							     :photo photo
+							     :button1 button1
+							     :button2 button2)
+					   (setf *space_name* (gtk:entry-text entry))
+					   (switch-space name_button photo button1 button2)
+					   (gtk:object-destroy dialog)))))))
+
+    (gtk:widget-show dialog)))
+
+(defun make-space-entry (status window table &key name counter name_button
+				photo button1 button2)
+  (cond
+   ((string-equal status "space")
+
+    (if (eql *spaces-count* 0)
+	(make-space-entry "first_item" window table
+			  :name_button name_button
+			  :photo photo
+			  :button1 button1
+			  :button2 button2))
+
+    (let ((hbox (make-instance 'gtk:h-box :spacing 10))
+	  (image_box (make-instance 'gtk:event-box))
+	  (image (make-instance 'gtk:image :stock "gtk-remove"))
+	  (name_box (make-instance 'gtk:event-box))
+	  (name_label (make-instance 'gtk:label :label name)))
+
+      (gtk:box-pack-start hbox (make-instance 'gtk:label :label "") :expand nil)
+
+      (gtk:container-add image_box image)
+      (gobject:connect-signal image_box "button_press_event"
+			      #'(lambda (a b)
+				  (declare (ignorable a b))
+				  (delete-reask "space" window
+						:name name
+						:hbox hbox
+						:name_button name_button
+						:photo photo
+						:button1 button1
+						:button2 button2)))
+      (gtk:box-pack-start hbox image_box :expand nil)
+
+      (gtk:container-add name_box name_label)
+      (gobject:connect-signal name_box "button_press_event"
+			      #'(lambda (a b)
+				  (declare (ignorable a b))
+				  (setf *current-dir*
+					(concatenate 'string *top-dir* name "/"))
+
+				  (setf *space_name* name)
+				  (switch-space name_button photo button1 button2)))
+      (gtk:box-pack-start hbox name_box :expand nil)
+
+      (gtk:table-attach table hbox 0 1 *spaces-count* (+ *spaces-count* 1))
+      (incf *spaces-count*)
+      (gtk:widget-show table)))
+
+   ((string-equal status "first_item")
+    (let ((event_box (make-instance 'gtk:event-box))
+	  (hbox (make-instance 'gtk:h-box :spacing 10))
+	  (image (make-instance 'gtk:image :stock "gtk-add"))
+	  (name_label (make-instance 'gtk:label
+				     :label "<b>Add new space</b>"
+				     :use-markup t)))
+
+      (gtk:box-pack-start hbox (make-instance 'gtk:label :label "") :expand nil)
+      (gtk:box-pack-start hbox image :expand nil)
+      (gtk:box-pack-start hbox name_label :expand nil)
+      (gtk:container-add event_box hbox)
+
+      (gtk:widget-modify-bg event_box 0 (gdk:color-parse "#FFFFFF"))
+
+      (gobject:connect-signal event_box "button_press_event"
+			      #'(lambda (a b)
+				  (declare (ignorable a b))
+				  (add-space table window name_button photo button1 button2)))
+
+      (gtk:table-attach table event_box 0 1 *spaces-count* (+ *spaces-count* 1))
+      (incf *spaces-count*)
+      (gtk:widget-show table)))
+
+   ((string-equal status "dummy")
+    (cond
+     ((eql counter 30) (gtk:widget-show table))
+     (t (let ((dummy_label (make-instance 'gtk:label :label "")))
+	  (gtk:table-attach table dummy_label 0 1 counter (+ counter 1)))
+
+	(make-space-entry "dummy" window table :counter (+ counter 1)))))))
+
+(defun list-existing-spaces (table window name photo button1 button2 spaces_list)
+  (dolist (item (sort (sqlite:execute-to-list *db*
+					      "select name from sqlite_master where type = 'table'")
+		      #'string< :key #'car))
+
+    (setf item (car item))
+
+    (make-space-entry "space" window table :name item :name_button name
+		      :photo photo :button1 button1 :button2 button2))
+
+  (make-space-entry "dummy" window table :counter *spaces-count*)
+  (gtk:scrolled-window-add-with-viewport spaces_list table))
+
 (defun main-interface ()
   (gtk:within-main-loop
    (let ((window (make-instance 'gtk:gtk-window
@@ -923,6 +1150,7 @@ and any data linked to it."
 	 (hbox2 (make-instance 'gtk:h-box
 			       :spacing 5))
 	 (vbox2 (make-instance 'gtk:v-box :spacing 5))
+	 (space_name_hbox (make-instance 'gtk:h-box :spacing 20))
 	 (space_name (make-instance 'gtk:button
 				    :label (check-defined "space_name")))
 	 (space_photo (make-instance 'gtk:image
@@ -935,11 +1163,11 @@ and any data linked to it."
 	 (inventory_vbox (make-instance 'gtk:v-box :sensitive nil :spacing 5))
 	 (inventory_hbox (make-instance 'gtk:h-box))
 	 (inventory (make-instance 'gtk:label
-				   :label "<b>Inventory:</b>"
+				   :label "<b>  Inventory:    </b>"
 				   :use-markup t))
 	 (inventory_list (make-instance 'gtk:scrolled-window
 					:height-request 45
-					:width-request 180))
+					:width-request 175))
 	 (inventory_table (make-instance 'gtk:table))
 	 (item_image (make-instance 'gtk:image
 				    :file "./images/default_item.png"))
@@ -956,7 +1184,7 @@ and any data linked to it."
 				   :label "Move to another space"
 				   :sensitive nil))
 	 (add_item_vbox (make-instance 'gtk:v-box
-				       :spacing 18))
+				       :spacing 23))
 	 (add_item (make-instance 'gtk:label
 				  :label "<b>Add new item</b>"
 				  :use-markup t))
@@ -978,13 +1206,15 @@ and any data linked to it."
 				     :wrap-mode :word-char
 				     :height-request 60
 				     :width-request 170))
+	 (add_button_hbox (make-instance 'gtk:h-box :spacing 10))
 	 (add_button (make-instance 'gtk:button
 				    :label "Add to inventory"))
 	 (side_vbox (make-instance 'gtk:v-box))
 	 (other_spaces (make-instance 'gtk:label
-				      :label "<b>Other spaces in this project</b>"
+				      :label "      <b>Spaces in this project</b>      "
 				      :use-markup t))
-	 (spaces_list (make-instance 'gtk:tree-view)))
+	 (spaces_list (make-instance 'gtk:scrolled-window))
+	 (spaces_table (make-instance 'gtk:table)))
 
      (gtk:container-add vbox1 (create-menubar window))
 
@@ -1025,7 +1255,7 @@ and any data linked to it."
      (gobject:g-signal-connect event_delete "button_press_event"
 			       #'(lambda (a b)
 				   (declare (ignorable a b))
-				   (delete-reask window)))
+				   (delete-reask "project" window)))
      (gtk:container-add hbox1 event_delete)
      (gtk:container-add hbox1 (make-instance 'gtk:v-separator))
 
@@ -1057,12 +1287,24 @@ and any data linked to it."
 
      (gtk:container-add vbox1 (make-instance 'gtk:h-separator))
 
+     (gtk:container-add space_name_hbox (make-instance 'gtk:label
+						       :label "               "))
+
      (gobject:g-signal-connect space_name "clicked"
 			       #'(lambda (button)
-				   (modify-space-name button)))
+				   (rename-space button window spaces_table space_name
+						 space_photo select_button delete_image spaces_list
+						 side_vbox)))
+     (gtk:container-add space_name_hbox space_name)
 
-     (gtk:container-add vbox2 space_name)
+     (gtk:container-add space_name_hbox (make-instance 'gtk:label
+						       :label "               "))
+
+     (gtk:container-add vbox2 space_name_hbox)
      (gtk:container-add vbox2 space_photo)
+
+     (gtk:container-add select_hbox (make-instance 'gtk:label
+						   :label "             "))
 
      (if (boundp '*space_photo*)
 	 (progn
@@ -1087,6 +1329,10 @@ and any data linked to it."
 				   (setf (gtk:button-label select_button) "Select a photo for this space")
 				   (setf (gtk:image-file space_photo) "./images/default_space.png")))
      (gtk:container-add select_hbox delete_image)
+
+     (gtk:container-add select_hbox (make-instance 'gtk:label
+						   :label "             "))
+
      (gtk:container-add vbox2 select_hbox)
 
      (gtk:container-add vbox2 (make-instance 'gtk:h-separator))
@@ -1098,7 +1344,6 @@ and any data linked to it."
 							      *space_name* "'"))
 			 #'string< :key #'car))
 
-       (incf *inv-count*)
        (setf item (car item))
 
        (make-inventory-entry item item_image
@@ -1132,7 +1377,6 @@ and any data linked to it."
      (gtk:container-add managing_hbox (make-instance 'gtk:v-separator))
 
      (gtk:container-add add_item_vbox add_item)
-     (gtk:container-add add_item_vbox (make-instance 'gtk:h-separator))
 
      (gtk:container-add new_item_hbox image_file_label)
 
@@ -1152,6 +1396,9 @@ and any data linked to it."
      (gtk:container-add description_hbox description_label)
      (gtk:container-add description_hbox description)
      (gtk:container-add add_item_vbox description_hbox)
+
+     (gtk:container-add add_button_hbox (make-instance 'gtk:label
+						       :label "        "))
 
      (gobject:g-signal-connect add_button "clicked"
 			       #'(lambda (b)
@@ -1173,7 +1420,11 @@ and any data linked to it."
 				      inventory_table
 				      remove_item))))
 
-     (gtk:container-add add_item_vbox add_button)
+     (gtk:container-add add_button_hbox add_button)
+     (gtk:container-add add_button_hbox (make-instance 'gtk:label
+						       :label "        "))
+
+     (gtk:container-add add_item_vbox add_button_hbox)
 
      (gtk:container-add managing_hbox add_item_vbox)
 
@@ -1183,6 +1434,13 @@ and any data linked to it."
      (gtk:container-add hbox2 (make-instance 'gtk:v-separator))
 
      (gtk:box-pack-start side_vbox other_spaces :expand nil)
+
+     (gtk:box-pack-start side_vbox (make-instance 'gtk:h-separator)
+			 :expand nil)
+
+     (list-existing-spaces spaces_table window space_name space_photo
+			   select_button delete_image spaces_list)
+
      (gtk:container-add side_vbox spaces_list)
      (gtk:container-add hbox2 side_vbox)
 
