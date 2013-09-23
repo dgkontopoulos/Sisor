@@ -1,0 +1,3 @@
+#!/bin/bash
+
+cd /opt/sisor && ./sisor_loader --load "sisor.lisp"

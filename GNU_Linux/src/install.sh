@@ -5,6 +5,22 @@ echo "You must be root to do this."
   exit 1
 fi
 
+echo -n "Checking for ImageMagick... "
+if !((which convert) > /dev/null);
+then
+echo -e "\033[1mERROR!\n\nImageMagick is not installed! Please install ImageMagick.\033[0m"
+  exit 1
+fi
+echo "OK"
+
+echo -n "Checking for Sqlite3... "
+if !((which sqlite3) > /dev/null);
+then
+echo -e "\033[1mERROR!\n\nSqlite3 is not installed! Please install Sqlite3.\033[0m"
+  exit 1
+fi
+echo "OK"
+
 if [ $(arch) == x86_64 ]; then
 	cp bin/sisor_x86_64 bin/sisor_loader;
 elif [ $(arch) == i686 ]; then
