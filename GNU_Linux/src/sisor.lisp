@@ -396,8 +396,9 @@ Please, resolve the problem and try again."))
     (gtk:container-add (gtk:dialog-content-area dialog) vbox)
     (gtk:widget-show dialog)))
 
-(defun delete-reask (status window &key name hbox name_button photo
-			    button1 button2)
+(defun delete-reask (status window &key name hbox name_button space_photo
+			    button1 button2 item_image item_description table
+			    remove_button vbox inventory_list item_hbox)
   (cond ((string-equal status "project")
 	 (let ((dialog (make-instance 'gtk:message-dialog
 				      :message-type :warning
@@ -460,7 +461,11 @@ and any data linked to it."
 							  '())))
 					      (setf *current-dir*
 						    (concatenate 'string *space_name* "/"))
-					      (switch-space name_button photo button1 button2)
+
+					      (switch-space name_button space_photo button1
+							    button2 item_image item_description table
+							    remove_button vbox inventory_list item_hbox)
+
 					      (decf *spaces-count*)
 					      (gtk:object-destroy hbox)
 					      (gtk:object-destroy dialog)))))
@@ -595,6 +600,7 @@ and any data linked to it."
 				:allow-grow nil
 				:allow-shrink nil
 				:border-width 20))
+	 (vbox_main (make-instance 'gtk:v-box))
 	 (hbox_main (make-instance 'gtk:h-box :spacing 10))
 
 	 (fish_logo (make-instance 'gtk:image
@@ -646,7 +652,7 @@ and any data linked to it."
 
 	 (buttons_hbox (make-instance 'gtk:h-box :spacing 20)))
 
-     (gtk:container-add hbox_main (create-menubar window))
+     (gtk:container-add vbox_main (create-menubar window))
 
      (gtk:container-add hbox_main fish_logo)
 
@@ -709,7 +715,8 @@ and any data linked to it."
 
      (gtk:container-add hbox_main vbox_welcome)
 
-     (gtk:container-add window hbox_main)
+     (gtk:container-add vbox_main hbox_main)
+     (gtk:container-add window vbox_main)
 
      (gobject:g-signal-connect window "destroy"
 			       #'(lambda (b)
@@ -836,7 +843,10 @@ and any data linked to it."
   (make-inventory-entry name photo_field description description_field
 			table remove_button))
 
-(defun rename-space (button window table name photo button1 button2 spaces_list vbox)
+(defun rename-space (button window spaces_table name photo button1 button2
+			    spaces_list vbox item_image item_description
+			    item_table remove_button item_vbox inventory_list
+			    item_hbox)
   (let ((dialog (make-instance 'gtk:message-dialog
 			       :message-type :other
 			       :buttons :ok-cancel
@@ -885,11 +895,13 @@ and any data linked to it."
 					   (setf (gtk:button-label button) (gtk:entry-text entry))
 
 					   (setf *spaces-count* 0)
-					   (gtk:object-destroy table)
-					   (let ((table (make-instance 'gtk:table)))
-					     (list-existing-spaces table window name photo button1
-								   button2 spaces_list)
-					     (gtk:widget-show vbox))
+					   (gtk:map-container-children spaces_table #'gtk:object-destroy)
+					   (list-existing-spaces spaces_table window name photo button1
+								 button2 spaces_list item_image
+								 item_description item_table
+								 remove_button item_vbox inventory_list
+								 item_hbox)
+					   (gtk:widget-show vbox)
 					   (gtk:object-destroy dialog)))))))
 
     (gtk:widget-show dialog)))
@@ -958,7 +970,9 @@ and any data linked to it."
 				     (concatenate 'string "select item from '"
 						  *space_name* "' where item = ?") item))))
 
-(defun switch-space (name_button photo button1 button2)
+(defun switch-space (name_button name_photo button1 button2 item_image
+				 item_description item_table remove_button vbox
+				 inventory_list item_hbox)
   (setf (gtk:button-label name_button) *space_name*)
 
   (if (cl-fad:file-exists-p
@@ -966,16 +980,28 @@ and any data linked to it."
       (progn
 	(setf *space_photo*
 	      (concatenate 'string *current-dir* "space_photo"))
-	(setf (gtk:image-file photo) *space_photo*)
+	(setf (gtk:image-file name_photo) *space_photo*)
 	(setf (gtk:button-label button1) "Select another photo")
 	(setf (gtk:widget-sensitive button2) t))
     (progn
       (makunbound '*space_photo*)
-      (setf (gtk:image-file photo) "./images/default_space.png")
+      (setf (gtk:image-file name_photo) "./images/default_space.png")
       (setf (gtk:button-label button1) "Select a photo for this space")
-      (setf (gtk:widget-sensitive button2) nil))))
+      (setf (gtk:widget-sensitive button2) nil)))
 
-(defun add-space (table window name_button photo button1 button2)
+  (setf *inv-count* 0)
+  (gtk:map-container-children item_table #'gtk:object-destroy)
+  (get-inventory-items item_image item_description item_table
+		       remove_button vbox inventory_list)
+
+  (if (eq *inv-count* 0)
+      (setf (gtk:text-buffer-text (gtk:text-view-buffer item_description)) ""))
+
+  (gtk:widget-show item_hbox))
+
+(defun add-space (table window name_button space_photo button1 button2
+			item_image item_description item_table remove_button
+			vbox inventory_list item_hbox)
   (let ((dialog (make-instance 'gtk:message-dialog
 			       :message-type :other
 			       :buttons :ok-cancel
@@ -1006,26 +1032,45 @@ and any data linked to it."
 					   (make-space-entry "space" window table
 							     :name (gtk:entry-text entry)
 							     :name_button name_button
-							     :photo photo
+							     :space_photo space_photo
 							     :button1 button1
-							     :button2 button2)
+							     :button2 button2
+							     :item_image item_image
+							     :item_description item_description
+							     :item_table item_table
+							     :remove_button remove_button
+							     :vbox vbox
+							     :inventory_list inventory_list
+							     :item_hbox item_hbox)
 					   (setf *space_name* (gtk:entry-text entry))
-					   (switch-space name_button photo button1 button2)
+
+					   (switch-space name_button space_photo button1
+							 button2 item_image item_description item_table
+							 remove_button vbox inventory_list item_hbox)
+
 					   (gtk:object-destroy dialog)))))))
 
     (gtk:widget-show dialog)))
 
 (defun make-space-entry (status window table &key name counter name_button
-				photo button1 button2)
+				space_photo button1 button2 item_image item_description
+				item_table remove_button vbox inventory_list item_hbox)
   (cond
    ((string-equal status "space")
 
     (if (eql *spaces-count* 0)
 	(make-space-entry "first_item" window table
 			  :name_button name_button
-			  :photo photo
+			  :space_photo space_photo
 			  :button1 button1
-			  :button2 button2))
+			  :button2 button2
+			  :item_image item_image
+			  :item_description item_description
+			  :item_table item_table
+			  :remove_button remove_button
+			  :vbox vbox
+			  :inventory_list inventory_list
+			  :item_hbox item_hbox))
 
     (let ((hbox (make-instance 'gtk:h-box :spacing 10))
 	  (image_box (make-instance 'gtk:event-box))
@@ -1043,9 +1088,16 @@ and any data linked to it."
 						:name name
 						:hbox hbox
 						:name_button name_button
-						:photo photo
+						:space_photo space_photo
 						:button1 button1
-						:button2 button2)))
+						:button2 button2
+						:item_image	item_image
+						:item_description item_description
+						:table item_table
+						:remove_button remove_button
+						:vbox vbox
+						:inventory_list inventory_list
+						:item_hbox item_hbox)))
       (gtk:box-pack-start hbox image_box :expand nil)
 
       (gtk:container-add name_box name_label)
@@ -1056,7 +1108,9 @@ and any data linked to it."
 					(concatenate 'string *top-dir* name "/"))
 
 				  (setf *space_name* name)
-				  (switch-space name_button photo button1 button2)))
+				  (switch-space name_button space_photo button1 button2
+						item_image item_description item_table remove_button
+						vbox inventory_list item_hbox)))
       (gtk:box-pack-start hbox name_box :expand nil)
 
       (gtk:table-attach table hbox 0 1 *spaces-count* (+ *spaces-count* 1))
@@ -1081,7 +1135,9 @@ and any data linked to it."
       (gobject:connect-signal event_box "button_press_event"
 			      #'(lambda (a b)
 				  (declare (ignorable a b))
-				  (add-space table window name_button photo button1 button2)))
+				  (add-space table window name_button space_photo button1
+					     button2 item_image item_description item_table remove_button
+					     vbox inventory_list item_hbox)))
 
       (gtk:table-attach table event_box 0 1 *spaces-count* (+ *spaces-count* 1))
       (incf *spaces-count*)
@@ -1095,18 +1151,54 @@ and any data linked to it."
 
 	(make-space-entry "dummy" window table :counter (+ counter 1)))))))
 
-(defun list-existing-spaces (table window name photo button1 button2 spaces_list)
+(defun list-existing-spaces (spaces_table window name photo button1 button2
+					  spaces_list item_image item_description
+					  item_table remove_button vbox inventory_list
+					  item_hbox)
   (dolist (item (sort (sqlite:execute-to-list *db*
 					      "select name from sqlite_master where type = 'table'")
 		      #'string< :key #'car))
 
     (setf item (car item))
 
-    (make-space-entry "space" window table :name item :name_button name
-		      :photo photo :button1 button1 :button2 button2))
+    (make-space-entry "space" window spaces_table
+		      :name item
+		      :name_button name
+		      :space_photo photo
+		      :button1 button1
+		      :button2 button2
+		      :item_image item_image
+		      :item_description item_description
+		      :item_table item_table
+		      :remove_button remove_button
+		      :vbox vbox
+		      :inventory_list inventory_list
+		      :item_hbox item_hbox))
 
-  (make-space-entry "dummy" window table :counter *spaces-count*)
-  (gtk:scrolled-window-add-with-viewport spaces_list table))
+  (make-space-entry "dummy" window spaces_table :counter *spaces-count*)
+  (gtk:scrolled-window-add-with-viewport spaces_list spaces_table))
+
+(defun get-inventory-items (image description table remove_button vbox
+				  inventory_list)
+  (setf (gtk:image-file image) "./images/default_item.png")
+  (dolist (item (sort (sqlite:execute-to-list *db*
+					      (concatenate 'string "select item from '"
+							   *space_name* "'"))
+		      #'string< :key #'car))
+
+    (setf item (car item))
+
+    (make-inventory-entry item image
+			  (caar (sqlite:execute-to-list *db*
+							(concatenate 'string "select description from '"
+								     *space_name* "' where item='" item "'")))
+			  description table remove_button))
+
+  (if (> *inv-count* 0)
+      (setf (gtk:widget-sensitive vbox) t)
+    (setf (gtk:widget-sensitive vbox) nil))
+
+  (gtk:scrolled-window-add-with-viewport inventory_list table))
 
 (defun main-interface ()
   (gtk:within-main-loop
@@ -1294,7 +1386,9 @@ and any data linked to it."
 			       #'(lambda (button)
 				   (rename-space button window spaces_table space_name
 						 space_photo select_button delete_image spaces_list
-						 side_vbox)))
+						 side_vbox item_image item_description
+						 inventory_table remove_item inventory_vbox
+						 inventory_list inventory_hbox)))
      (gtk:container-add space_name_hbox space_name)
 
      (gtk:container-add space_name_hbox (make-instance 'gtk:label
@@ -1339,22 +1433,9 @@ and any data linked to it."
 
      (gtk:container-add inventory_hbox inventory)
 
-     (dolist (item (sort (sqlite:execute-to-list *db*
-						 (concatenate 'string "select item from '"
-							      *space_name* "'"))
-			 #'string< :key #'car))
+     (get-inventory-items item_image item_description inventory_table
+			  remove_item inventory_vbox inventory_list)
 
-       (setf item (car item))
-
-       (make-inventory-entry item item_image
-			     (caar (sqlite:execute-to-list *db*
-							   (concatenate 'string "select description from '"
-									*space_name* "' where item='" item "'")))
-			     item_description inventory_table remove_item))
-
-     (if (> *inv-count* 0) (setf (gtk:widget-sensitive inventory_vbox) t))
-
-     (gtk:scrolled-window-add-with-viewport inventory_list inventory_table)
      (gtk:container-add inventory_hbox inventory_list)
 
      (gtk:container-add inventory_vbox inventory_hbox)
@@ -1439,7 +1520,9 @@ and any data linked to it."
 			 :expand nil)
 
      (list-existing-spaces spaces_table window space_name space_photo
-			   select_button delete_image spaces_list)
+			   select_button delete_image spaces_list item_image
+			   item_description inventory_table remove_item
+			   inventory_vbox inventory_list inventory_hbox)
 
      (gtk:container-add side_vbox spaces_list)
      (gtk:container-add hbox2 side_vbox)
