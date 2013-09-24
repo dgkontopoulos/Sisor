@@ -37,7 +37,7 @@ inspired from <b><i><a href='http://en.wikipedia.org/wiki/Sisor'>Sisor rabdophor
 	   (top_info (make-instance 'gtk:label
 				    :label "<b>S</b>isor; <b>I</b>ntelligent <b>S</b>pace <b>Or</b>ganization, v. 1.0
 
-Homepage
+Homepage -- <a href='https://github.com/dgkontopoulos/Sisor'>Source Code</a>
 (C) 2013 <a href='mailto:dgkontopoulos@member.fsf.org?Subject=Sisor'>Dimitrios - Georgios Kontopoulos</a>
 "
 				    :use-markup t
