@@ -41,7 +41,7 @@ Make sure that ImageMagick and SQLite3 are already installed.
 
 ## KNOWN BUGS
 
-<b>i) Launching the application on GNU/Linux from a menu (such as Unity's dash) causes a terminal to appear along with it.</b> The terminal shows the standard error of the application and is mostly an unneeded nuisance. Setting "<i>Terminal=false</i>" to the .desktop file prevents the application from launching from the menu.
+<b>i) <a href="https://github.com/dgkontopoulos/Sisor/issues/1" style="text-decoration:none">Launching the application on GNU/Linux from a menu (such as Unity's dash) causes a terminal to appear along with it.</a></b> The terminal shows the standard error of the application and is mostly an unneeded nuisance. Setting "<i>Terminal=false</i>" to the .desktop file prevents the application from launching from the menu.
 
 ## TO-DOs
 

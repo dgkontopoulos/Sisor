@@ -24,7 +24,7 @@ inspired from <b><i><a href='http://en.wikipedia.org/wiki/Sisor'>Sisor rabdophor
 					:title "About Sisor"
 					:icon (gtk:image-pixbuf
 					       (make-instance 'gtk:image
-							      :file "./images/sisor_fish.png"))
+							      :file "./images/sisor_minilogo.png"))
 					:type :toplevel
 					:border-width 10
 					:window-position :mouse
@@ -37,7 +37,7 @@ inspired from <b><i><a href='http://en.wikipedia.org/wiki/Sisor'>Sisor rabdophor
 	   (top_info (make-instance 'gtk:label
 				    :label "<b>S</b>isor; <b>I</b>ntelligent <b>S</b>pace <b>Or</b>ganization, v. 1.0
 
-Homepage -- <a href='https://github.com/dgkontopoulos/Sisor'>Source Code</a>
+<a href='http://dgkontopoulos.github.io/Sisor/'>Website</a> -- <a href='https://github.com/dgkontopoulos/Sisor'>Source Code</a>
 (C) 2013 <a href='mailto:dgkontopoulos@member.fsf.org?Subject=Sisor'>Dimitrios - Georgios Kontopoulos</a>
 "
 				    :use-markup t
@@ -709,7 +709,7 @@ importing one."
 				:type :toplevel
 				:icon (gtk:image-pixbuf
 				       (make-instance 'gtk:image
-						      :file "./images/sisor_fish.png"))
+						      :file "./images/sisor_minilogo.png"))
 				:title "Sisor"
 				:window-position :center
 				:decorated nil
@@ -1416,7 +1416,7 @@ back to the starting popup."
 				:title "Sisor"
 				:icon (gtk:image-pixbuf
 				       (make-instance 'gtk:image
-						      :file "./images/sisor_fish.png"))
+						      :file "./images/sisor_minilogo.png"))
 				:type :toplevel
 				:window-position :center
 				:resizable nil))
