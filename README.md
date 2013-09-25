@@ -10,9 +10,13 @@ A Common Lisp graphical application for efficient spaces organization and invent
 
 The application's <a href="http://en.wikipedia.org/wiki/Recursive_acronym#Computer-related_examples" style="text-decoration:none">recursive acronym</a> and logo have been inspired from <b><i><a href="http://en.wikipedia.org/wiki/Sisor" style="text-decoration:none">Sisor rabdophorus</a></i></b>.
 
+## DEMO/TUTORIAL
+
+<center><iframe width="640" height="480" src="http://www.youtube.com/embed/uIqMjxHD-6Q?rel=0&vq=hd720" frameborder="0" allowfullscreen></iframe></center>
+
 ## INSTALLATION
 
-###For GNU/Linux systems:
+###For GNU/Linux and BSD systems:
 Download the application, unzip it and run the <b>install.sh</b> script with superuser privileges from Sisor's directory, e.g.:
 <code>sudo bash ./install.sh</code>
 
@@ -23,7 +27,7 @@ Make sure that ImageMagick and SQLite3 are already installed.
 
 ## DEPENDENCIES
 
-\-<a href="http://www.sbcl.org/" style="text-decoration:none">SBCL</a>, >= 1.1.1.0
+\-<a href="http://www.sbcl.org/" style="text-decoration:none">SBCL</a>, >= 1.0.58
 
 \-<a href="http://weitz.de/cl-fad/" style="text-decoration:none">cl-fad</a>, >= 0.7.2 (Common Lisp library)
 

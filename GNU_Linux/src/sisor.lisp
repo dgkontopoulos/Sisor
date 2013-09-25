@@ -550,7 +550,7 @@ and any data linked to it."
 							  (directory (concatenate 'string *top-dir* "*/"))
 							  '())))
 					      (setf *current-dir*
-						    (concatenate 'string *space_name* "/"))
+						    (concatenate 'string *top-dir* *space_name* "/"))
 
 					      (switch-space name_button space_photo button1
 							    button2 item_image item_description table
@@ -670,7 +670,7 @@ and any data linked to it."
 
 				  ;; Open the site using the system's default browser.
 				  (asdf:run-shell-command
-				   "x-www-browser https://en.wikipedia.org/wiki/Common_Lisp&")))
+				   "xdg-open https://en.wikipedia.org/wiki/Common_Lisp&")))
     (gtk:menu-shell-append menu_help menu_help_cl)
 
     ;; About cl-gtk2.
@@ -680,7 +680,7 @@ and any data linked to it."
 
 				  ;; Open the site using the system's default browser.
 				  (asdf:run-shell-command
-				   "x-www-browser http://www.cliki.net/cl-gtk2&")))
+				   "xdg-open http://www.cliki.net/cl-gtk2&")))
     (gtk:menu-shell-append menu_help menu_help_clgtk2)
 
     ;; Separator.
