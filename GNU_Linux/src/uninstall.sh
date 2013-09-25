@@ -8,4 +8,4 @@ fi
 rm -rf /opt/sisor/ || exit;
 rm /usr/share/applications/sisor.desktop || exit;
 
-echo "Sisor was successfully uninstalled."
+echo -e "\033[1mSisor was successfully uninstalled.\033[0m"

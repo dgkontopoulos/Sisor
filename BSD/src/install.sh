@@ -35,10 +35,11 @@ chmod 755 ./bin/*
 cp bin/sisor_loader /opt/sisor/
 cp sisor.lisp /opt/sisor/
 cp bin/sisor /opt/sisor/
-cp -R images/ /opt/sisor/
+cp -R images/ /opt/sisor/images/
 
 mkdir -p /usr/share/applications/
 chmod +x sisor.desktop
 cp sisor.desktop /usr/share/applications/
 
-echo "Success! Sisor was installed in '/opt/sisor'!"
+echo -e "\n\033[1mSuccess! Sisor was installed in '/opt/sisor'!"
+echo -e "You can launch it from the menu.\033[0m"

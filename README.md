@@ -17,13 +17,24 @@ https://www.youtube.com/watch?v=uIqMjxHD-6Q&hd=1
 ## INSTALLATION
 
 ###For GNU/Linux and BSD systems:
-Download the application, unzip it and run the <b>install.sh</b> script with superuser privileges from Sisor's directory, e.g.:
+Download the application, decompress it and run the <b>install.sh</b> script with superuser privileges from Sisor's directory, e.g.:
 <code>sudo bash ./install.sh</code>
 
 Respectively, to uninstall Sisor:
 <code>sudo bash ./uninstall.sh</code>
 
 Make sure that ImageMagick and SQLite3 are already installed.
+
+<br>
+
+###For OS X systems:
+Download the application, decompress it and run the <b>install.sh</b> script with superuser privileges from Sisor's directory, e.g.:
+<code>sudo bash ./install.sh</code>
+
+Respectively, to uninstall Sisor:
+<code>sudo bash ./uninstall.sh</code>
+
+Make sure that gtk+ (e.g. <code>brew install gtk+</code>), ImageMagick and SQLite3 are already installed.
 
 ## DEPENDENCIES
 
@@ -45,7 +56,7 @@ Make sure that ImageMagick and SQLite3 are already installed.
 
 ## KNOWN BUGS
 
-<b>i) <a href="https://github.com/dgkontopoulos/Sisor/issues/1" style="text-decoration:none">Launching the application on GNU/Linux from a menu (such as Unity's dash) causes a terminal to appear along with it.</a></b> The terminal shows the standard error of the application and is mostly an unneeded nuisance. Setting "<i>Terminal=false</i>" to the .desktop file prevents the application from launching from the menu.
+<b>i) <a href="https://github.com/dgkontopoulos/Sisor/issues/1" style="text-decoration:none">Launching the application on GNU/Linux or BSD from a menu (such as Unity's dash) causes a terminal to appear along with it.</a></b> The terminal shows the standard error of the application and is mostly an unneeded nuisance. Setting "<i>Terminal=false</i>" to the .desktop file prevents the application from launching from the menu.
 
 ## TO-DOs
 

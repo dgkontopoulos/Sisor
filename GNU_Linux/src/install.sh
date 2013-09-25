@@ -1,5 +1,7 @@
 #!/bin/bash
 
+die() { echo -e "\033[1m$@\033[0m" 1>&2 ; exit 1; }
+
 if ! [ $(id -u) = 0 ]; then
 echo "You must be root to do this."
   exit 1
@@ -26,7 +28,7 @@ if [ $(arch) == x86_64 ]; then
 elif [ $(arch) == i686 ]; then
 	cp bin/sisor_i686 bin/sisor_loader;
 else
-	exit
+	die "Unsupported architecture!"
 fi
 
 mkdir -p /opt/sisor/
@@ -41,4 +43,5 @@ mkdir -p /usr/share/applications/
 chmod +x sisor.desktop
 cp sisor.desktop /usr/share/applications/
 
-echo "Success! Sisor was installed in '/opt/sisor'!"
+echo -e "\n\033[1mSuccess! Sisor was installed in '/opt/sisor'!"
+echo -e "You can launch it from the menu/dash.\033[0m"

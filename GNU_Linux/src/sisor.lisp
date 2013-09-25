@@ -716,7 +716,7 @@ importing one."
 				:allow-grow nil
 				:allow-shrink nil
 				:border-width 20))
-	 (vbox_main (make-instance 'gtk:v-box))
+	 (vbox_main (make-instance 'gtk:v-box :spacing 15))
 	 (hbox_main (make-instance 'gtk:h-box :spacing 10))
 
 	 (fish_logo (make-instance 'gtk:image
