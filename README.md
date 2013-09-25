@@ -12,7 +12,7 @@ The application's <a href="http://en.wikipedia.org/wiki/Recursive_acronym#Comput
 
 ## DEMO/TUTORIAL
 
-<center><iframe width="640" height="480" src="http://www.youtube.com/embed/uIqMjxHD-6Q?rel=0&vq=hd720" frameborder="0" allowfullscreen></iframe></center>
+https://www.youtube.com/watch?v=uIqMjxHD-6Q&hd=1
 
 ## INSTALLATION
 
