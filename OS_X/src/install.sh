@@ -24,11 +24,13 @@ echo "OK"
 mkdir -p /opt/sisor/
 mkdir -p /usr/local/bin/
 chmod 755 ./bin/*
+chmod 755 uninstall.sh
 
 cp bin/sisor_mac /opt/sisor/sisor_loader
 cp sisor.lisp /opt/sisor/
 cp bin/sisor /usr/local/bin/sisor
 cp -R images/ /opt/sisor/images/
+cp uninstall.sh /opt/sisor/
 
 echo $'\033[1mSuccess! Sisor was installed in \'/opt/sisor\'!'
 echo $'Launch it with \'sisor\' (without quotes).\033[0m'

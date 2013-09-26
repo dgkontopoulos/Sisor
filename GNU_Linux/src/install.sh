@@ -33,11 +33,13 @@ fi
 
 mkdir -p /opt/sisor/
 chmod 755 ./bin/*
+chmod 755 uninstall.sh
 
 cp bin/sisor_loader /opt/sisor/
 cp sisor.lisp /opt/sisor/
 cp bin/sisor /opt/sisor/
 cp -R images/ /opt/sisor/
+cp uninstall.sh /opt/sisor/
 
 mkdir -p /usr/share/applications/
 chmod +x sisor.desktop

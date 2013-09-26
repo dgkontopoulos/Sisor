@@ -1,5 +1,7 @@
 #!/bin/bash
 
+die() { echo -e "\033[1m$@\033[0m" 1>&2 ; exit 1; }
+
 if ! [ $(id -u) = 0 ]; then
 echo "You must be root to do this."
   exit 1
@@ -26,16 +28,18 @@ if [ $(uname -p) == amd64 ]; then
 elif [ $(arch) == i386 ]; then
 	cp bin/sisor_i386 bin/sisor_loader;
 else
-	exit
+	die "Unsupported architecture!"
 fi
 
 mkdir -p /opt/sisor/
 chmod 755 ./bin/*
+chmod 755 uninstall.sh
 
 cp bin/sisor_loader /opt/sisor/
 cp sisor.lisp /opt/sisor/
 cp bin/sisor /opt/sisor/
 cp -R images/ /opt/sisor/images/
+cp uninstall.sh /opt/sisor/
 
 mkdir -p /usr/share/applications/
 chmod +x sisor.desktop
