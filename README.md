@@ -16,7 +16,12 @@ https://www.youtube.com/watch?v=uIqMjxHD-6Q&hd=1
 
 ## INSTALLATION
 
-###For GNU/Linux and BSD systems:
+###For Fedora GNU/Linux systems: <a href="https://github.com/dgkontopoulos/Sisor/releases/download/1.0/sisor-1.000.x86_64.rpm">64-bit RPM</a> | <a href="https://github.com/dgkontopoulos/Sisor/releases/download/1.0/sisor-1.000.i686.rpm">32-bit RPM</a>
+Download the RPM according to your OS' version and double click it to install it. Dependencies will be taken care of automatically.
+
+<br>
+
+###For other GNU/Linux and BSD systems: <a href="https://github.com/dgkontopoulos/Sisor/releases/download/1.0/sisor_1.000_GNU_Linux.tar.gz">GNU/Linux tarball</a> | <a href="https://github.com/dgkontopoulos/Sisor/releases/download/1.0/sisor_1.000_BSD.tar.gz">BSD tarball</a>
 Download the application, decompress it and run the <b>install.sh</b> script with superuser privileges from Sisor's directory, e.g.:
 <code>sudo bash ./install.sh</code>
 
@@ -27,7 +32,7 @@ Make sure that ImageMagick and SQLite3 are already installed.
 
 <br>
 
-###For OS X systems:
+###For OS X systems: <a href="https://github.com/dgkontopoulos/Sisor/releases/download/1.0/sisor_1.000_OS_X.tar.gz">OS X tarball</a>
 Download the application, decompress it and run the <b>install.sh</b> script with superuser privileges from Sisor's directory, e.g.:
 <code>sudo bash ./install.sh</code>
 
@@ -67,6 +72,10 @@ Make sure that gtk+ (e.g. <code>brew install gtk+</code>), ImageMagick and SQLit
 <b>iii)</b> Create a successful working PPA for easier installation of Sisor on Ubuntu.
 
 <b>iv)</b> Internationalization.
+
+## EXAMPLE PROJECT
+
+<a href="http://dgkontopoulos.github.io/Sisor/kindergarten.tar.gz">Two spaces of a kindergarten</a>, as organized by Nikoletta Kourtidou, a kindergarten teacher.
 
 ## AUTHOR
 
