@@ -25,7 +25,7 @@ echo "OK"
 
 if [ $(uname -p) == amd64 ]; then
 	cp bin/sisor_amd64 bin/sisor_loader;
-elif [ $(arch) == i386 ]; then
+elif [ $(uname -p) == i386 ]; then
 	cp bin/sisor_i386 bin/sisor_loader;
 else
 	die "Unsupported architecture!"
